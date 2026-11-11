@@ -1,0 +1,960 @@
+grimcraft-go variable renames
+Before -> After (final names in the current source)
+
+709 variable declarations and 4 private fields renamed.
+Line numbers refer to the current source files. Repeated names are listed separately by declaration.
+JSON field names and gameplay behavior are unchanged.
+
+cmd/server/main.go
+==================
+  main
+    line 43: httpAddr -> httpAddress
+    line 44: wtAddr -> webTransportAddress
+    line 45: certDir -> certificateDirectory
+    line 68: cert -> certificate
+    line 68: certDER -> certificateDER
+    line 68: err -> operationError
+    line 89: wtServer -> webTransportServer
+    line 93: wtRouter -> webTransportRouter
+    line 97: err -> currentOperationError
+  ensureCert
+    line 106: certDir -> certificateDirectory
+    line 107: certFile -> certificateFile
+    line 109: err -> certificateReadError
+    line 109: rawCert -> rawCertificate
+    line 110: err -> privateKeyReadError
+    line 110: rawKey -> rawPrivateKey
+    line 111: cert -> certificate
+    line 111: err -> keyPairError
+    line 112: err -> certificateParseError
+    line 112: leaf -> parsedCertificate
+    line 118: err -> certificateError
+    line 118: key -> privateKey
+    line 122: certTemplate -> certificateTemplate
+    line 132: derBytes -> certificateDERBytes
+    line 136: err -> directoryCreationError
+    line 139: certOut -> certificateOutput
+    line 145: keyOut -> keyOutput
+    line 149: keyDER -> privateKeyDER
+    line 156: cert -> currentCertificate
+  browserCertificateValid
+    line 165: cert -> certificate
+    line 166: ok -> isValid
+  listenURL
+    line 171: addr -> address
+    line 172: err -> operationError
+
+cmd/server/main_test.go
+=======================
+  TestEnsureCertBrowserCompatibleAndReused
+    line 16: t -> testCase
+    line 18: der -> certificateDER
+    line 18: err -> operationError
+    line 22: cert -> certificate
+  TestBrowserCertificateRejectsLegacyAndExpired
+    line 42: t -> testCase
+    line 44: ec -> privateKey
+    line 56: t -> currentTestCase
+  TestListenURL
+    line 64: t -> testCase
+
+internal/hub/commands.go
+========================
+  toIntList
+    line 32: out -> result
+  toString
+    line 71: ok -> isValid
+    line 71: s -> text
+  HandleCommand
+    line 79: cmd -> currentCommand
+    line 81: args -> arguments
+    line 116: raw -> componentData
+    line 117: id -> capturePointID
+    line 117: ok -> validPointID
+    line 158: e -> enemyMetadata
+    line 158: ok -> currentIsValid
+    line 159: k -> fieldName
+    line 160: id -> enemySquadID
+    line 160: ok -> validEnemyID
+    line 224: formIdx -> formationIndex
+    line 251: btype -> buildingType
+    line 260: ok -> buildingPlaced
+    line 266: utype -> unitType
+    line 275: entityID -> capturePointID
+    line 334: ok -> hasHitMetadata
+    line 335: k -> entityIDField
+    line 336: id -> repairTargetID
+    line 336: ok -> validRepairTargetID
+  DecodeClientMessage
+    line 370: raw -> encodedData
+    line 373: err -> operationError
+  unmarshal
+    line 381: raw -> encodedData
+
+internal/hub/hub.go
+===================
+  Room fields
+    line 58: mu -> mutex
+  Hub fields
+    line 74: mu -> mutex
+  newLobbyID
+    line 89: raw -> randomBytes
+    line 90: err -> operationError
+  List
+    line 123: out -> result
+  Clients
+    line 290: out -> result
+
+internal/hub/hub_test.go
+========================
+  TestJoinAssignsOpposingTeams
+    line 11: t -> testCase
+    line 15: err -> operationError
+  TestLobbyFull
+    line 34: t -> testCase
+    line 37: err -> operationError
+    line 40: err -> currentOperationError
+  TestHandleCommandMove
+    line 45: t -> testCase
+    line 51: id -> entityID
+    line 56: raw -> commandJSON
+    line 57: cmd -> command
+    line 58: err -> operationError
+  TestClientMessageDecode
+    line 71: t -> testCase
+    line 72: err -> operationError
+
+internal/hub/loading_test.go
+============================
+  TestMatchWaitsForEveryLoadedPlayer
+    line 9: t -> testCase
+    line 10: h -> gameHub
+    line 11: l -> lobby
+    line 12: a -> hostClient
+    line 14: r -> room
+    line 16: s -> snapshot
+    line 19: b -> guestClient
+    line 21: c -> client
+    line 21: cmd -> currentCommand
+    line 23: ok -> acceptedDuringLoading
+    line 31: s -> currentSnapshot
+    line 34: ok -> commandAccepted
+    line 39: starts -> matchStartTime
+    line 55: raw -> encodedData
+    line 68: ok -> acceptedAfterLoading
+  TestDisconnectUnblocksLoading
+    line 72: t -> testCase
+    line 73: h -> gameHub
+    line 74: l -> lobby
+    line 75: a -> hostClient
+    line 77: b -> guestClient
+    line 81: r -> room
+
+internal/hub/lobby.go
+=====================
+  BroadcastLobby
+    line 9: h -> gameHub
+    line 9: id -> lobbyID
+    line 19: c -> client
+  HandleLobbyCommand
+    line 31: c -> client
+    line 31: h -> gameHub
+    line 31: id -> lobbyID
+    line 31: ok -> isValid
+    line 67: args -> arguments
+    line 70: i -> index
+    line 88: args -> currentArguments
+    line 94: raw -> encodedData
+    line 95: err -> operationError
+    line 104: p -> playerSlot
+    line 118: i -> currentIndex
+
+internal/hub/lobby_id_test.go
+=============================
+  TestLobbyIDsAreShortRandomURLSafeStrings
+    line 8: t -> testCase
+    line 11: i -> index
+    line 12: id -> lobbyID
+    line 21: h -> gameHub
+    line 22: l -> lobby
+
+internal/hub/lobby_test.go
+==========================
+  TestOnlineLobbyStartFactionAndHost
+    line 5: t -> testCase
+    line 6: h -> gameHub
+    line 8: err -> operationError
+    line 19: ok -> isValid
+    line 43: pos -> position
+  TestSameUsernameDisconnectUsesPlayerID
+    line 66: t -> testCase
+    line 67: h -> gameHub
+    line 68: l -> lobby
+    line 69: a -> hostClient
+    line 70: b -> guestClient
+
+internal/hub/room_commands.go
+=============================
+  ApplyCommand
+    line 9: r -> room
+  snapshotFrame
+    line 17: r -> room
+    line 32: id -> entityID
+    line 44: raw -> encodedData
+  maybeStartLocked
+    line 49: r -> room
+    line 53: id -> entityID
+
+internal/hub/skirmish_commands_test.go
+======================================
+  mustCommand
+    line 8: raw -> commandJSON
+    line 8: t -> testCase
+    line 10: cmd -> command
+    line 11: err -> operationError
+  ownedSquad
+    line 17: h -> gameHub
+    line 17: t -> testCase
+    line 19: id -> entityID
+    line 19: s -> squad
+  TestSkirmishCommandParity
+    line 28: t -> testCase
+    line 29: h -> gameHub
+    line 31: err -> operationError
+    line 35: w -> world
+    line 40: id -> entityID
+    line 44: raw -> encodedData
+    line 46: cmd -> command
+    line 48: ok -> isValid
+    line 54: b -> builder
+    line 54: id -> ownedBuilderID
+    line 60: ok -> buildingPlaced
+    line 60: r -> placementFailureReason
+    line 65: b -> building
+    line 65: id -> buildingID
+    line 75: i -> index
+    line 78: ok -> invalidProductionAccepted
+    line 78: r -> invalidProductionReason
+    line 82: trainRaw -> trainCommandJSON
+    line 84: ok -> productionAccepted
+    line 84: r -> productionFailureReason
+    line 87: ok -> invalidStanceAccepted
+    line 87: r -> invalidStanceReason
+    line 90: stRaw -> stanceCommandJSON
+    line 92: ok -> stanceAccepted
+    line 92: r -> stanceFailureReason
+    line 97: grRaw -> grenadeCommandJSON
+    line 99: ok -> grenadeUpgradeAccepted
+    line 99: r -> grenadeUpgradeFailureReason
+    line 102: plRaw -> plasmaCommandJSON
+    line 104: ok -> plasmaUpgradeAccepted
+    line 104: r -> plasmaUpgradeFailureReason
+    line 107: rsRaw -> researchCommandJSON
+    line 109: ok -> researchAccepted
+    line 109: r -> researchFailureReason
+    line 113: ok -> unknownCommandAccepted
+
+internal/hub/snapshot_stream_test.go
+====================================
+  TestFullSkirmishSnapshotEveryTick
+    line 9: t -> testCase
+    line 10: h -> gameHub
+    line 14: c -> client
+    line 14: err -> operationError
+    line 25: raw -> encodedData
+    line 35: err -> currentOperationError
+    line 48: e -> entity
+
+internal/server/api.go
+======================
+  API
+    line 22: r -> currentRequest
+    line 22: w -> responseWriter
+    line 45: err -> operationError
+    line 64: r -> preflightRequest
+    line 64: w -> preflightResponseWriter
+
+internal/server/connection_test.go
+==================================
+  TestWebTransportDiscovery
+    line 12: t -> testCase
+    line 17: r -> responseRecorder
+    line 22: got -> actualResult
+    line 23: err -> operationError
+  TestDiscoveryWithoutWebTransport
+    line 34: t -> testCase
+    line 35: r -> responseRecorder
+    line 38: err -> operationError
+
+internal/server/contract_test.go
+================================
+  TestRoomContractSocketFree
+    line 15: t -> testCase
+    line 19: err -> operationError
+    line 26: mustMsg -> readMessage
+    line 28: raw -> encodedData
+    line 30: err -> currentOperationError
+    line 67: e -> entity
+    line 68: rec -> entityRecord
+    line 69: k -> fieldName
+    line 75: want -> expectedValue
+    line 80: acct -> playerAccount
+    line 88: e -> currentEntity
+    line 89: rec -> currentEntityRecord
+    line 90: comps -> components
+    line 91: ok -> isValid
+    line 103: cmd -> command
+    line 104: err -> decodeCommandError
+    line 110: ack -> acknowledgement
+    line 120: raw -> currentEncodedData
+
+internal/server/e2e_test.go
+===========================
+  TestWSJoinSessionSnapshot
+    line 20: t -> testCase
+    line 28: err -> operationError
+    line 33: srv -> testServer
+    line 37: ctx -> requestContext
+    line 39: conn -> connection
+    line 39: err -> currentOperationError
+    line 45: readMsg -> readMessage
+    line 46: err -> readError
+    line 46: raw -> encodedData
+    line 51: err -> decodeMessageError
+    line 76: e -> entity
+    line 77: rec -> entityRecord
+    line 78: comps -> components
+    line 79: ok -> isValid
+    line 88: err -> writeCommandError
+    line 98: ack -> acknowledgement
+
+internal/server/health_test.go
+==============================
+  TestHealthReportsSkirmishV2
+    line 11: t -> testCase
+    line 12: srv -> testServer
+    line 14: err -> operationError
+    line 14: resp -> response
+    line 20: err -> currentOperationError
+
+internal/sim/animation.go
+=========================
+  tickActionTimersLocked
+    line 6: dt -> deltaTime
+    line 6: w -> world
+    line 7: sq -> squad
+    line 14: i -> index
+    line 15: s -> soldier
+  recordAttackLocked
+    line 22: sq -> squad
+    line 22: w -> world
+    line 30: i -> index
+    line 31: s -> soldier
+  soldierAnimation
+    line 56: s -> soldier
+    line 56: sq -> squad
+  builderAnimation
+    line 95: b -> builder
+  acquireTargetLocked
+    line 109: s -> squad
+    line 109: w -> world
+    line 123: best -> closestDistance
+    line 128: d -> distance
+    line 135: id -> entityID
+
+internal/sim/animation_test.go
+==============================
+  actorFrom
+    line 8: id -> entityID
+    line 8: w -> world
+    line 9: e -> entity
+    line 10: r -> entityRecord
+    line 12: c -> component
+  TestActionAnimations
+    line 21: t -> testCase
+    line 22: w -> world
+    line 23: a -> attackingSquad
+    line 24: b -> defendingSquad
+  TestCaptureAnimationSequence
+    line 74: t -> testCase
+    line 75: w -> world
+    line 76: sq -> squad
+    line 79: c -> currentTestCase
+    line 84: got -> actualResult
+
+internal/sim/auto_attack_test.go
+================================
+  TestAutomaticRangedAndAssault
+    line 8: t -> testCase
+    line 9: w -> world
+    line 10: a -> attackingSquad
+    line 11: b -> defendingSquad
+    line 14: i -> index
+    line 17: i -> currentIndex
+    line 31: i -> simulationStep
+  TestAttackMoveKeepsAssaultAndAcquiresBeyondGunRange
+    line 41: t -> testCase
+    line 42: w -> world
+    line 43: a -> attackingSquad
+    line 44: b -> defendingSquad
+
+internal/sim/lobby.go
+=====================
+  canonicalFaction
+    line 8: f -> faction
+  baseFor
+    line 26: p -> startPosition
+    line 35: p -> currentStartPosition
+  SpawnLobbySquad
+    line 46: w -> world
+    line 55: s -> building
+    line 61: bx -> basePositionX
+    line 61: bz -> basePositionZ
+    line 67: s1 -> firstSquad
+    line 69: s2 -> secondSquad
+  PlaceBuildingFree
+    line 87: btype -> buildingType
+    line 87: pos -> position
+    line 87: w -> world
+    line 91: id -> entityID
+    line 92: hp -> healthPoints
+  SetFaction
+    line 102: w -> world
+    line 106: ok -> isValid
+    line 106: p -> player
+    line 109: s -> squad
+    line 114: b -> builder
+    line 119: bd -> building
+    line 124: st -> structure
+  AddComputer
+    line 130: w -> world
+    line 131: s -> squad
+
+internal/sim/map_layout.go
+==========================
+  mapNameKey
+    line 42: r -> character
+  layoutFor
+    line 56: e -> mapFile
+  seedMapPointsLocked
+    line 71: w -> world
+    line 78: p -> pointCoordinates
+    line 96: p -> point
+    line 101: id -> entityID
+
+internal/sim/map_layout_test.go
+===============================
+  TestAlvarusLayout
+    line 5: t -> testCase
+    line 6: w -> world
+    line 13: p -> point
+    line 24: b -> building
+
+internal/sim/melee_contact.go
+=============================
+  enterMeleeLocked
+    line 7: s -> squad
+    line 7: w -> world
+    line 11: id -> opponentID
+    line 16: i -> index
+  updateMeleeContactsLocked
+    line 21: w -> world
+    line 22: previous -> previousMeleeOpponents
+    line 23: id -> squadID
+    line 23: s -> squad
+    line 29: s -> currentSquad
+    line 34: best -> closestDistance
+    line 35: other -> otherSquad
+    line 39: d -> distance
+    line 40: held -> wasInMeleeContact
+    line 41: starts -> startsMeleeContact
+    line 52: id -> opponentID
+    line 61: i -> index
+
+internal/sim/melee_contact_test.go
+==================================
+  contactWorld
+    line 9: w -> world
+    line 10: a -> attackingSquad
+    line 11: b -> defendingSquad
+    line 16: sq -> squad
+    line 17: i -> index
+  TestMeleeIsMutualAndDoesNotChangeStance
+    line 23: t -> testCase
+    line 25: a -> attackingSquad
+    line 25: b -> defendingSquad
+    line 25: w -> world
+    line 28: s -> squad
+  TestContactOverridesDistantTargetAndReleases
+    line 48: t -> testCase
+    line 49: a -> attackingSquad
+    line 49: b -> defendingSquad
+    line 49: w -> world
+  TestRangedUnitsDoNotStartMeleeWithoutAnAssault
+    line 68: t -> testCase
+    line 69: a -> attackingSquad
+    line 69: b -> defendingSquad
+    line 69: w -> world
+  TestMeleeReleaseHysteresisAndFriendlyUnits
+    line 76: t -> testCase
+    line 77: a -> attackingSquad
+    line 77: b -> defendingSquad
+    line 77: w -> world
+
+internal/sim/skirmish_test.go
+=============================
+  TestSkirmishParity
+    line 9: t -> testCase
+    line 10: w -> world
+    line 14: b -> builder
+    line 19: startReq -> startingRequisition
+    line 20: id -> entityID
+    line 20: ok -> isValid
+    line 28: i -> index
+    line 38: n0 -> initialSquadCount
+    line 39: i -> currentIndex
+    line 46: sq -> squad
+    line 47: s -> ownedSquadCandidate
+    line 58: reqBefore -> requisitionBefore
+    line 69: i -> researchStep
+
+internal/sim/world.go
+=====================
+  costOf
+    line 44: ok -> isValid
+    line 44: v -> value
+  constructTimeOf
+    line 50: btype -> buildingType
+  World fields
+    line 264: mu -> mutex
+  allocID
+    line 288: w -> world
+    line 289: id -> entityID
+  playerOf
+    line 294: w -> world
+    line 295: ok -> isValid
+    line 295: p -> player
+  EnsurePlayer
+    line 302: w -> world
+  ensurePlayerLocked
+    line 308: w -> world
+    line 309: ok -> isValid
+    line 309: p -> player
+    line 321: p -> currentPlayer
+  EnsureMapPoints
+    line 327: w -> world
+  ensurePointsLocked
+    line 332: w -> world
+  SpawnSquad
+    line 335: w -> world
+    line 363: i -> index
+  SpawnBuilder
+    line 373: w -> world
+    line 373: x -> positionX
+    line 373: z -> positionZ
+    line 380: id -> entityID
+    line 381: b -> builder
+  RemovePlayerSquads
+    line 388: w -> world
+    line 396: b -> builder
+    line 396: id -> builderID
+    line 401: b -> building
+    line 401: id -> buildingID
+    line 406: id -> structureID
+    line 406: s -> structure
+    line 411: id -> vehicleID
+    line 411: v -> vehicle
+  dist
+    line 419: from -> startPosition
+    line 419: to -> targetPosition
+  MuLockTestKillSoldier
+    line 426: w -> world
+    line 429: ok -> isValid
+    line 429: s -> squad
+    line 430: i -> index
+  PlaceBuilding
+    line 441: btype -> buildingType
+    line 441: pos -> position
+    line 441: w -> world
+    line 444: p -> player
+    line 453: id -> entityID
+    line 457: ar -> attackRange
+    line 469: hp -> healthPoints
+    line 475: ct -> constructionTime
+    line 476: cons -> isConstructing
+    line 481: b -> builder
+    line 481: ok -> isValid
+  TrainUnit
+    line 491: utype -> unitType
+    line 491: w -> world
+    line 494: p -> player
+    line 502: b -> building
+    line 502: ok -> isValid
+    line 510: ok -> currentIsValid
+    line 510: v -> vehicle
+  unitCostTime
+    line 521: utype -> unitType
+    line 530: c -> unitCost
+    line 530: ok -> isValid
+  QueueReinforceAt
+    line 538: formIdx -> formationIndex
+    line 538: w -> world
+    line 541: ok -> isValid
+    line 541: s -> squad
+    line 545: p -> player
+    line 554: sol -> soldier
+    line 559: q -> reinforcementItem
+    line 564: i -> index
+  QueueResearch
+    line 582: w -> world
+    line 585: p -> player
+    line 593: mk -> researchItem
+    line 594: b -> building
+    line 594: ok -> buildingFound
+    line 602: ok -> currentIsValid
+    line 602: s -> structure
+    line 610: ok -> pointFound
+    line 610: pt -> point
+    line 619: b -> currentBuilding
+  UpgradePoint
+    line 631: w -> world
+    line 634: ok -> isValid
+    line 634: pt -> point
+    line 638: p -> player
+  Demolish
+    line 648: w -> world
+    line 651: b -> building
+    line 651: ok -> buildingFound
+    line 658: ok -> structureFound
+    line 658: s -> structure
+    line 665: ok -> vehicleFound
+    line 665: v -> vehicle
+  Advance
+    line 678: dt -> deltaTime
+    line 678: w -> world
+    line 691: best -> closestDistance
+    line 696: d -> currentDistance
+    line 702: id -> entityID
+    line 708: p -> player
+    line 710: pt -> point
+    line 725: gen -> generatorEntityID
+    line 726: s -> structure
+    line 735: b -> builder
+    line 760: dirX -> directionX
+    line 761: dirZ -> directionZ
+    line 769: bd -> building
+    line 786: p -> currentPlayer
+    line 801: st -> producingStructure
+    line 814: p -> generatorOwner
+    line 823: ok -> isValid
+    line 823: tid -> targetID
+    line 833: v -> vehicle
+    line 874: pl -> reinforcementOwner
+    line 876: sol -> currentSoldier
+    line 881: i -> index
+    line 894: q -> reinforcementItem
+    line 898: i -> currentIndex
+    line 940: dirX -> currentDirectionX
+    line 941: dirZ -> currentDirectionZ
+    line 956: ok -> currentIsValid
+    line 956: pt -> currentPoint
+    line 995: ok -> targetFound
+    line 1007: dx -> chaseDirectionX
+    line 1007: dz -> chaseDirectionZ
+    line 1017: dx -> targetDirectionX
+    line 1017: dz -> targetDirectionZ
+    line 1027: i -> victimIndex
+    line 1064: pt -> researchPoint
+  closestEnemySoldier
+    line 1082: pos -> position
+    line 1082: rng -> attackRange
+    line 1082: w -> world
+    line 1083: best -> closestDistance
+    line 1084: bestD -> currentClosestDistance
+    line 1085: sq -> squad
+    line 1089: i -> index
+    line 1093: d -> distance
+  damageSoldier
+    line 1109: dmg -> damage
+    line 1109: w -> world
+    line 1110: sq -> squad
+    line 1111: i -> index
+    line 1112: eid -> soldierEntityID
+  updatePointOwner
+    line 1130: pt -> point
+    line 1130: w -> world
+  finishBuilderLocked
+    line 1138: b -> builder
+    line 1138: w -> world
+    line 1146: ok -> buildingFound
+    line 1146: pt -> point
+    line 1158: bd -> building
+    line 1158: ok -> currentIsValid
+    line 1162: ok -> structureFound
+    line 1162: st -> structure
+  spawnProductionLocked
+    line 1169: at -> targetPosition
+    line 1169: utype -> unitType
+    line 1169: w -> world
+    line 1172: id -> builderID
+    line 1176: id -> jetID
+    line 1177: pos -> position
+    line 1178: mo -> moveOrder
+    line 1182: id -> transportID
+    line 1186: id -> airfieldID
+    line 1192: sq -> squad
+    line 1201: i -> index
+    line 1205: cp -> currentTargetPosition
+  updateWinnerLocked
+    line 1213: w -> world
+    line 1218: sq -> squad
+    line 1228: b -> building
+  MoveSquads
+    line 1251: w -> world
+    line 1264: b -> builder
+    line 1265: cp -> targetPosition
+    line 1271: v -> vehicle
+    line 1272: cp -> currentTargetPosition
+  MoveUnits
+    line 1283: ids -> entityIDs
+    line 1283: w -> world
+    line 1286: id -> entityID
+    line 1288: cp -> squadDestination
+    line 1298: b -> builder
+    line 1299: cp -> builderDestination
+    line 1305: v -> vehicle
+    line 1306: cp -> vehicleDestination
+  StopSquads
+    line 1317: w -> world
+  StopUnits
+    line 1337: ids -> entityIDs
+    line 1337: w -> world
+    line 1340: id -> entityID
+    line 1351: b -> builder
+    line 1358: v -> vehicle
+  Attack
+    line 1369: w -> world
+  UnitCommand
+    line 1394: ids -> entityIDs
+    line 1394: w -> world
+    line 1397: id -> entityID
+    line 1400: b -> builder
+    line 1400: ok -> isValid
+    line 1401: cp -> builderDestination
+    line 1406: ok -> currentIsValid
+    line 1406: v -> vehicle
+    line 1407: cp -> vehicleDestination
+    line 1430: ok -> enemyFound
+    line 1430: t -> enemySquadCandidate
+    line 1431: cp -> targetSquadID
+    line 1438: cp -> squadDestination
+  SetStance
+    line 1447: ids -> entityIDs
+    line 1447: w -> world
+    line 1450: ok -> isValid
+    line 1451: id -> entityID
+    line 1452: s -> squad
+    line 1462: b -> builder
+    line 1466: v -> vehicle
+  SetCombatStance
+    line 1475: ids -> entityIDs
+    line 1475: w -> world
+    line 1478: ok -> isValid
+    line 1479: id -> entityID
+    line 1480: s -> squad
+    line 1488: i -> index
+    line 1495: b -> builder
+  SetAutoChase
+    line 1504: ids -> entityIDs
+    line 1504: w -> world
+    line 1507: ok -> isValid
+    line 1508: id -> entityID
+    line 1509: s -> squad
+  SetRally
+    line 1518: w -> world
+    line 1521: b -> building
+    line 1521: ok -> isValid
+    line 1522: cp -> targetPosition
+    line 1526: ok -> currentIsValid
+    line 1526: v -> vehicle
+    line 1527: cp -> currentTargetPosition
+  SetProjectileType
+    line 1535: w -> world
+  SetAutoReinforce
+    line 1550: w -> world
+  QueueReinforce
+    line 1562: w -> world
+  GrenadeUpgrade
+    line 1567: w -> world
+    line 1570: ok -> isValid
+    line 1570: s -> squad
+    line 1574: p -> player
+  PlasmaUpgrade
+    line 1584: w -> world
+    line 1587: ok -> isValid
+    line 1587: s -> squad
+    line 1591: p -> player
+  CancelUpgrade
+    line 1601: w -> world
+    line 1604: ok -> isValid
+    line 1604: s -> squad
+    line 1608: p -> player
+  SpendRequisition
+    line 1632: w -> world
+    line 1635: p -> player
+  BuilderStance
+    line 1644: w -> world
+    line 1647: b -> builder
+    line 1647: ok -> isValid
+  BuilderCommand
+    line 1656: w -> world
+    line 1659: b -> builder
+    line 1659: ok -> isValid
+    line 1663: cp -> targetPosition
+  ResumeBuild
+    line 1673: w -> world
+    line 1676: b -> builder
+    line 1676: ok -> buildingFound
+    line 1680: bd -> building
+    line 1680: ok -> currentIsValid
+    line 1688: ok -> structureFound
+    line 1688: st -> structure
+  BuildAddon
+    line 1700: w -> world
+    line 1703: b -> building
+    line 1703: ok -> isValid
+    line 1707: p -> player
+    line 1712: a -> existingAddon
+  BoardTransport
+    line 1726: ids -> entityIDs
+    line 1726: w -> world
+    line 1729: ok -> isValid
+    line 1729: v -> vehicle
+    line 1733: id -> entityID
+    line 1734: ok -> currentIsValid
+    line 1734: s -> squad
+  FlySquads
+    line 1744: ids -> entityIDs
+    line 1744: w -> world
+  soldierSlots
+    line 1751: out -> result
+  Snapshot
+    line 1782: w -> world
+  Delta
+    line 1793: w -> world
+  vecBox
+    line 1828: v -> vector
+  yawOf
+    line 1832: f -> facing
+  nonNullList
+    line 1843: v -> value
+    line 1847: rv -> reflectedValue
+  snapshotV2Locked
+    line 1854: w -> world
+    line 1856: comp -> component
+    line 1856: id -> entityID
+    line 1856: pos -> position
+    line 1872: id -> squadID
+    line 1872: s -> squad
+    line 1874: i -> index
+    line 1875: eid -> soldierEntityID
+    line 1890: comp -> squadComponent
+    line 1907: i -> soldierIndex
+    line 1908: sol -> soldier
+    line 1915: ox -> formationOffsetX
+    line 1916: oz -> formationOffsetZ
+    line 1917: spos -> soldierPosition
+    line 1918: maxHp -> maximumHealthPoints
+    line 1922: scomp -> soldierComponent
+    line 1933: b -> builder
+    line 1933: id -> builderID
+    line 1934: comp -> builderComponent
+    line 1942: bd -> building
+    line 1942: id -> buildingID
+    line 1947: comp -> buildingComponent
+    line 1956: id -> structureID
+    line 1956: st -> structure
+    line 1957: comp -> structureComponent
+    line 1966: id -> vehicleID
+    line 1966: v -> vehicle
+    line 1971: mo -> vehicleMoveOrder
+    line 1979: comp -> vehicleComponent
+    line 1987: id -> pointID
+    line 1987: pt -> point
+    line 1996: comp -> pointComponent
+    line 2005: p -> player
+    line 2009: res -> completedResearch
+    line 2010: k -> researchKey
+    line 2025: out -> result
+  SnapshotV2
+    line 2035: w -> world
+    line 2038: raw -> snapshotData
+    line 2039: ents -> entities
+    line 2042: ok -> isValid
+    line 2042: s -> text
+  SnapshotFrameV2
+    line 2049: w -> world
+  aliveCount
+    line 2055: s -> squad
+    line 2056: n -> entityCount
+  ResetMatchClock
+    line 2066: w -> world
+
+internal/sim/world_test.go
+==========================
+  TestMoveArrives
+    line 9: t -> testCase
+  TestMoveRejectsForeignSquad
+    line 32: t -> testCase
+  TestAttackKills
+    line 41: t -> testCase
+  TestSnapshotShape
+    line 59: t -> testCase
+
+internal/transport/framing.go
+=============================
+  Framer fields
+    line 18: buf -> buffer
+  Push
+    line 24: out -> result
+    line 26: frameLen -> frameLength
+
+internal/transport/framing_test.go
+==================================
+  TestFrameRoundTrip
+    line 8: t -> testCase
+    line 16: got -> actualResult
+
+internal/transport/join_test.go
+===============================
+  TestFramedWebTransportJoinMetadata
+    line 9: t -> testCase
+    line 11: raw -> encodedData
+    line 14: b -> payloadByte
+    line 20: got -> actualResult
+    line 21: err -> operationError
+
+internal/transport/webtransport.go
+==================================
+  WTHandler
+    line 20: wtServer -> webTransportServer
+    line 22: err -> operationError
+  serveWTSession
+    line 43: err -> operationError
+    line 63: raw -> encodedData
+    line 64: err -> currentOperationError
+    line 74: err -> readCommandError
+    line 82: err -> decodeCommandError
+    line 87: err -> joinError
+    line 109: err -> writeMessageError
+
+internal/transport/ws.go
+========================
+  WSHandler
+    line 33: err -> operationError
+    line 38: conn -> connection
+    line 47: ctx -> requestContext
+    line 62: writeCtx -> writeContext
+    line 63: err -> currentOperationError
+    line 73: err -> readMessageError
+    line 73: raw -> encodedData

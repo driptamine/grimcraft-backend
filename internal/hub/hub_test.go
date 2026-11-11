@@ -8,70 +8,70 @@ import (
 	"grimcraft-go/internal/protocol"
 )
 
-func TestJoinAssignsOpposingTeams(t *testing.T) {
+func TestJoinAssignsOpposingTeams(testCase *testing.T) {
 	testHub := NewHub()
 	lobby := testHub.CreateLobby("test", "Arena", 4)
 	blue := "Blue"
-	firstClient, _, err := testHub.Join(lobby.ID, &blue, "p1", "Orks")
-	if err != nil {
-		t.Fatal(err)
+	firstClient, _, operationError := testHub.Join(lobby.ID, &blue, "p1", "Orks")
+	if operationError != nil {
+		testCase.Fatal(operationError)
 	}
-	secondClient, _, err := testHub.Join(lobby.ID, nil, "p2", "Eldar")
-	if err != nil {
-		t.Fatal(err)
+	secondClient, _, operationError := testHub.Join(lobby.ID, nil, "p2", "Eldar")
+	if operationError != nil {
+		testCase.Fatal(operationError)
 	}
 	if firstClient.Team != "Blue" {
-		t.Fatalf("preferred team ignored: %q", firstClient.Team)
+		testCase.Fatalf("preferred team ignored: %q", firstClient.Team)
 	}
 	if secondClient.Team != "Red" {
-		t.Fatalf("auto-balance failed: %q", secondClient.Team)
+		testCase.Fatalf("auto-balance failed: %q", secondClient.Team)
 	}
-	if len(testHub.RoomOf(lobby.ID).World().Squads) != 2 {
-		t.Fatal("each join should spawn one squad")
+	if len(testHub.RoomOf(lobby.ID).World().Squads) != 4 {
+		testCase.Fatal("each join should spawn a full skirmish seat")
 	}
 }
 
-func TestLobbyFull(t *testing.T) {
+func TestLobbyFull(testCase *testing.T) {
 	testHub := NewHub()
 	lobby := testHub.CreateLobby("tiny", "Arena", 1)
-	if _, _, err := testHub.Join(lobby.ID, nil, "p1", ""); err != nil {
-		t.Fatal(err)
+	if _, _, operationError := testHub.Join(lobby.ID, nil, "p1", ""); operationError != nil {
+		testCase.Fatal(operationError)
 	}
-	if _, _, err := testHub.Join(lobby.ID, nil, "p2", ""); err == nil {
-		t.Fatal("expected lobby-full error")
+	if _, _, currentOperationError := testHub.Join(lobby.ID, nil, "p2", ""); currentOperationError == nil {
+		testCase.Fatal("expected lobby-full error")
 	}
 }
 
-func TestHandleCommandMove(t *testing.T) {
+func TestHandleCommandMove(testCase *testing.T) {
 	testHub := NewHub()
 	lobby := testHub.CreateLobby("test", "Arena", 4)
 	client, _, _ := testHub.Join(lobby.ID, nil, "p1", "")
 	world := testHub.RoomOf(lobby.ID).World()
 	var squadID int
-	for id, squad := range world.Squads {
+	for entityID, squad := range world.Squads {
 		if squad.Owner == client.PlayerID {
-			squadID = id
+			squadID = entityID
 		}
 	}
-	raw := `{"MoveSquads":{"squad_ids":[` + strconv.Itoa(squadID) + `],"target":{"x":10,"y":0,"z":5}}}`
-	var cmd map[string]any
-	if err := json.Unmarshal([]byte(raw), &cmd); err != nil {
-		t.Fatal(err)
+	commandJSON := `{"MoveSquads":{"squad_ids":[` + strconv.Itoa(squadID) + `],"target":{"x":10,"y":0,"z":5}}}`
+	var command map[string]any
+	if operationError := json.Unmarshal([]byte(commandJSON), &command); operationError != nil {
+		testCase.Fatal(operationError)
 	}
-	accepted, reason := HandleCommand(world, client.PlayerID, cmd)
+	accepted, reason := HandleCommand(world, client.PlayerID, command)
 	if !accepted {
-		t.Fatalf("move rejected: %s", reason)
+		testCase.Fatalf("move rejected: %s", reason)
 	}
 	squad := world.Squads[squadID]
 	if squad.MoveOrder == nil || squad.MoveOrder.X != 10 || squad.MoveOrder.Z != 5 {
-		t.Fatalf("move order not applied: %+v", squad.MoveOrder)
+		testCase.Fatalf("move order not applied: %+v", squad.MoveOrder)
 	}
 }
 
-func TestClientMessageDecode(t *testing.T) {
-	decoded, err := DecodeClientMessage([]byte(`{"Command":{"StopSquads":{"squad_ids":[3]}}}`))
-	if err != nil || decoded.Command == nil {
-		t.Fatalf("decode failed: %v %+v", err, decoded)
+func TestClientMessageDecode(testCase *testing.T) {
+	decoded, operationError := DecodeClientMessage([]byte(`{"Command":{"StopSquads":{"squad_ids":[3]}}}`))
+	if operationError != nil || decoded.Command == nil {
+		testCase.Fatalf("decode failed: %v %+v", operationError, decoded)
 	}
 	var _ protocol.SessionInfo
 }

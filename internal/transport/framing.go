@@ -15,22 +15,22 @@ func EncodeFrame(payload []byte) []byte {
 
 // Framer incrementally splits a byte stream into frames.
 type Framer struct {
-	buf []byte
+	buffer []byte
 }
 
 // Push appends bytes and returns every complete frame payload.
 func (framer *Framer) Push(chunk []byte) [][]byte {
-	framer.buf = append(framer.buf, chunk...)
-	var out [][]byte
-	for len(framer.buf) >= 4 {
-		frameLen := int(binary.LittleEndian.Uint32(framer.buf[:4]))
-		if len(framer.buf) < 4+frameLen {
+	framer.buffer = append(framer.buffer, chunk...)
+	var result [][]byte
+	for len(framer.buffer) >= 4 {
+		frameLength := int(binary.LittleEndian.Uint32(framer.buffer[:4]))
+		if len(framer.buffer) < 4+frameLength {
 			break
 		}
-		payload := make([]byte, frameLen)
-		copy(payload, framer.buf[4:4+frameLen])
-		out = append(out, payload)
-		framer.buf = append([]byte(nil), framer.buf[4+frameLen:]...)
+		payload := make([]byte, frameLength)
+		copy(payload, framer.buffer[4:4+frameLength])
+		result = append(result, payload)
+		framer.buffer = append([]byte(nil), framer.buffer[4+frameLength:]...)
 	}
-	return out
+	return result
 }

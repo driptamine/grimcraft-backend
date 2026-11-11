@@ -24,12 +24,14 @@ type Vec3 struct {
 
 // JoinRequest is sent by the client right after connecting.
 type JoinRequest struct {
+	Username      string  `json:"username,omitempty"`
+	Faction       string  `json:"faction,omitempty"`
 	PreferredTeam *string `json:"preferred_team"`
 }
 
 // ClientMessage is any single client->server message.
 type ClientMessage struct {
-	Join    *JoinRequest `json:"Join,omitempty"`
+	Join    *JoinRequest   `json:"Join,omitempty"`
 	Command map[string]any `json:"Command,omitempty"`
 }
 
@@ -41,28 +43,29 @@ type SessionInfo struct {
 
 // SquadData mirrors what _onSnapshot reads in multiplayer.js.
 type SquadData struct {
-	Team              string    `json:"team"` // "Blue" | "Red"
-	Position          Vec3      `json:"position"`
-	Facing            Vec3      `json:"facing"`
-	Speed             float64   `json:"speed"`
-	AttackRange       float64   `json:"attack_range"`
-	DetectionRange    float64   `json:"detection_range"`
-	GrenadeCd         float64   `json:"grenade_cd"`
-	GrenadeReloadTime float64   `json:"grenade_reload_time"`
-	IdleTime          float64   `json:"idle_time"`
-	ReinforceQueue    []any     `json:"reinforce_queue"`
-	ReinforceProgress float64   `json:"reinforce_progress"`
-	GrenadeQueue      []any     `json:"grenade_queue"`
-	GrenadeProgress   float64   `json:"grenade_progress"`
-	MoveOrder         *Vec3     `json:"move_order"`
-	Stopped           bool      `json:"stopped"`
-	AutoChase         bool      `json:"auto_chase"`
-	ProjectileType    string    `json:"projectile_type"`
-	Soldiers          []any     `json:"soldiers"`
-	ForcedTarget      *int      `json:"forced_target"`
-	ForcedSoldierID   *int      `json:"forced_soldier_id"`
-	AutoReinforce     bool      `json:"auto_reinforce"`
-	Owner             int       `json:"owner"`
+	Faction           string  `json:"faction"`
+	Team              string  `json:"team"` // "Blue" | "Red"
+	Position          Vec3    `json:"position"`
+	Facing            Vec3    `json:"facing"`
+	Speed             float64 `json:"speed"`
+	AttackRange       float64 `json:"attack_range"`
+	DetectionRange    float64 `json:"detection_range"`
+	GrenadeCd         float64 `json:"grenade_cd"`
+	GrenadeReloadTime float64 `json:"grenade_reload_time"`
+	IdleTime          float64 `json:"idle_time"`
+	ReinforceQueue    []any   `json:"reinforce_queue"`
+	ReinforceProgress float64 `json:"reinforce_progress"`
+	GrenadeQueue      []any   `json:"grenade_queue"`
+	GrenadeProgress   float64 `json:"grenade_progress"`
+	MoveOrder         *Vec3   `json:"move_order"`
+	Stopped           bool    `json:"stopped"`
+	AutoChase         bool    `json:"auto_chase"`
+	ProjectileType    string  `json:"projectile_type"`
+	Soldiers          []any   `json:"soldiers"`
+	ForcedTarget      *int    `json:"forced_target"`
+	ForcedSoldierID   *int    `json:"forced_soldier_id"`
+	AutoReinforce     bool    `json:"auto_reinforce"`
+	Owner             int     `json:"owner"`
 }
 
 // SnapshotEntry is one [id, squadData] pair; squads arrive as a JSON
@@ -72,10 +75,21 @@ type SnapshotEntry struct {
 	Squad SquadData
 }
 
+// Snapshot is the full-state broadcast (legacy schema 1).
+
+// SnapshotV2 is the skirmish-parity full state: entities + players + winner.
+type SnapshotV2 struct {
+	Schema   int     `json:"schema"`
+	Tick     uint64  `json:"tick"`
+	Entities []any   `json:"entities"`
+	Players  []any   `json:"players"`
+	Winner   *string `json:"winner,omitempty"`
+}
+
 // Snapshot is the full-state broadcast.
 type Snapshot struct {
-	Tick   uint64          `json:"tick"`
-	Squads [][]any         `json:"squads"`
+	Tick   uint64  `json:"tick"`
+	Squads [][]any `json:"squads"`
 }
 
 // Delta is the per-tick position broadcast.

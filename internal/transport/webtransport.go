@@ -17,11 +17,11 @@ import (
 
 // WTHandler upgrades /grimcraft to WebTransport and serves one session.
 // lobbyID picks the default lobby when the URL carries no ?lobby=.
-func WTHandler(gameHub *hub.Hub, wtServer *webtransport.Server) http.HandlerFunc {
+func WTHandler(gameHub *hub.Hub, webTransportServer *webtransport.Server) http.HandlerFunc {
 	return func(writer http.ResponseWriter, request *http.Request) {
-		session, err := wtServer.Upgrade(writer, request)
-		if err != nil {
-			log.Printf("[wt] upgrade failed: %v", err)
+		session, operationError := webTransportServer.Upgrade(writer, request)
+		if operationError != nil {
+			log.Printf("[wt] upgrade failed: %v", operationError)
 			return
 		}
 		if requestedLobby := request.URL.Query().Get("lobby"); requestedLobby != "" {
@@ -40,16 +40,16 @@ func WTHandler(gameHub *hub.Hub, wtServer *webtransport.Server) http.HandlerFunc
 
 func serveWTSession(gameHub *hub.Hub, session *webtransport.Session, lobbyID string) {
 	// First client stream must be the command bidi stream.
-	stream, err := session.AcceptStream(session.Context())
-	if err != nil {
+	stream, operationError := session.AcceptStream(session.Context())
+	if operationError != nil {
 		session.CloseWithError(0, "no cmd stream")
 		return
 	}
 	defer stream.Close()
 
 	// Server->client uni stream (framed).
-	serverStream, err := session.OpenUniStream()
-	if err != nil {
+	serverStream, operationError := session.OpenUniStream()
+	if operationError != nil {
 		return
 	}
 	defer serverStream.Close()
@@ -60,9 +60,9 @@ func serveWTSession(gameHub *hub.Hub, session *webtransport.Session, lobbyID str
 		return
 	}
 	joined := false
-	writeFramed := func(raw []byte) error {
-		_, err := serverStream.Write(EncodeFrame(raw))
-		return err
+	writeFramed := func(encodedData []byte) error {
+		_, currentOperationError := serverStream.Write(EncodeFrame(encodedData))
+		return currentOperationError
 	}
 	// Forward room broadcasts to the uni stream.
 	forwardDone := make(chan struct{})
@@ -71,22 +71,22 @@ func serveWTSession(gameHub *hub.Hub, session *webtransport.Session, lobbyID str
 	streamFramer := &Framer{}
 	readBuffer := make([]byte, 65536)
 	for {
-		bytesRead, err := stream.Read(readBuffer)
-		if err != nil {
-			if err != io.EOF {
-				log.Printf("[wt] cmd stream read: %v", err)
+		bytesRead, readCommandError := stream.Read(readBuffer)
+		if readCommandError != nil {
+			if readCommandError != io.EOF {
+				log.Printf("[wt] cmd stream read: %v", readCommandError)
 			}
 			break
 		}
 		for _, payload := range streamFramer.Push(readBuffer[:bytesRead]) {
-			incoming, err := hub.DecodeClientMessage(payload)
-			if err != nil {
+			incoming, decodeCommandError := hub.DecodeClientMessage(payload)
+			if decodeCommandError != nil {
 				continue
 			}
 			if incoming.Join != nil && !joined {
-				newClient, _, err := gameHub.Join(lobbyID, incoming.Join.PreferredTeam, "", "")
-				if err != nil {
-					session.CloseWithError(1, err.Error())
+				newClient, _, joinError := gameHub.Join(lobbyID, incoming.Join.PreferredTeam, incoming.Join.Username, incoming.Join.Faction)
+				if joinError != nil {
+					session.CloseWithError(1, joinError.Error())
 					return
 				}
 				client = newClient
@@ -106,17 +106,21 @@ func serveWTSession(gameHub *hub.Hub, session *webtransport.Session, lobbyID str
 							if !active {
 								return
 							}
-							if err := writeFramed(outgoing); err != nil {
+							if writeMessageError := writeFramed(outgoing); writeMessageError != nil {
 								return
 							}
 						}
 					}
 				}()
 				room.SendSession(client)
+				gameHub.BroadcastLobby(lobbyID)
 				continue
 			}
 			if incoming.Command != nil && joined {
-				accepted, reason := hub.HandleCommand(room.World(), client.PlayerID, incoming.Command)
+				handled, accepted, reason := gameHub.HandleLobbyCommand(lobbyID, client, incoming.Command)
+				if !handled {
+					accepted, reason = room.ApplyCommand(client.PlayerID, incoming.Command)
+				}
 				hub.Ack(client, accepted, reason)
 			}
 		}

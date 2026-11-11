@@ -17,7 +17,7 @@ import (
 
 // TestWSJoinSessionSnapshot is the end-to-end contract check: connect,
 // receive Session + Snapshot, send a command, receive CmdAck.
-func TestWSJoinSessionSnapshot(t *testing.T) {
+func TestWSJoinSessionSnapshot(testCase *testing.T) {
 	testHub := hub.NewHub()
 	lobbies := testHub.List()
 	lobbyID := lobbies[0].ID
@@ -25,71 +25,79 @@ func TestWSJoinSessionSnapshot(t *testing.T) {
 	router := http.NewServeMux()
 	router.Handle("/api/", API(testHub))
 	router.HandleFunc("/join", transport.WSHandler(testHub))
-	if probe, err := net.Listen("tcp", "127.0.0.1:0"); err != nil {
-		t.Skipf("sandbox blocks TCP listen, skipping live-socket check: %v", err)
+	if probe, operationError := net.Listen("tcp", "127.0.0.1:0"); operationError != nil {
+		testCase.Skipf("sandbox blocks TCP listen, skipping live-socket check: %v", operationError)
 	} else {
 		_ = probe.Close()
 	}
-	srv := httptest.NewServer(router)
-	defer srv.Close()
+	testServer := httptest.NewServer(router)
+	defer testServer.Close()
 
-	wsURL := "ws" + srv.URL[len("http"):] + "/join?lobby=" + lobbyID + "&username=bot&faction=Orks"
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	wsURL := "ws" + testServer.URL[len("http"):] + "/join?lobby=" + lobbyID + "&username=bot&faction=Orks"
+	requestContext, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	conn, _, err := websocket.Dial(ctx, wsURL, nil)
-	if err != nil {
-		t.Fatal(err)
+	connection, _, currentOperationError := websocket.Dial(requestContext, wsURL, nil)
+	if currentOperationError != nil {
+		testCase.Fatal(currentOperationError)
 	}
-	defer conn.Close(websocket.StatusNormalClosure, "test done")
+	defer connection.Close(websocket.StatusNormalClosure, "test done")
 
-	readMsg := func() map[string]any {
-		_, raw, err := conn.Read(ctx)
-		if err != nil {
-			t.Fatalf("read: %v", err)
+	readMessage := func() map[string]any {
+		_, encodedData, readError := connection.Read(requestContext)
+		if readError != nil {
+			testCase.Fatalf("read: %v", readError)
 		}
 		var envelope map[string]any
-		if err := json.Unmarshal(raw, &envelope); err != nil {
-			t.Fatalf("bad json %q: %v", raw, err)
+		if decodeMessageError := json.Unmarshal(encodedData, &envelope); decodeMessageError != nil {
+			testCase.Fatalf("bad json %q: %v", encodedData, decodeMessageError)
 		}
 		return envelope
 	}
 
-	sessionMsg := readMsg()
+	sessionMsg := readMessage()
 	sessionInfo, valid := sessionMsg["Session"].(map[string]any)
 	if !valid {
-		t.Fatalf("first message must be Session, got %v", sessionMsg)
+		testCase.Fatalf("first message must be Session, got %v", sessionMsg)
 	}
 	if sessionInfo["player_id"] == nil || (sessionInfo["team"] != "Blue" && sessionInfo["team"] != "Red") {
-		t.Fatalf("bad session: %v", sessionInfo)
+		testCase.Fatalf("bad session: %v", sessionInfo)
 	}
-	snapshotMsg := readMsg()
+	snapshotMsg := readMessage()
 	if snapshotMsg["Snapshot"] == nil {
-		t.Fatalf("second message must be Snapshot, got %v", snapshotMsg)
+		testCase.Fatalf("second message must be Snapshot, got %v", snapshotMsg)
 	}
 
 	// Send a MoveSquads for our own squad id.
-	squads := snapshotMsg["Snapshot"].(map[string]any)["squads"].([]any)
-	if len(squads) == 0 {
-		t.Fatal("snapshot has no squads")
+	entities := snapshotMsg["Snapshot"].(map[string]any)["entities"].([]any)
+	if len(entities) == 0 {
+		testCase.Fatal("snapshot has no entities")
 	}
-	ownSquadID := squads[0].([]any)[0].(float64)
+	ownSquadID := 0.0
+	for _, entity := range entities {
+		entityRecord := entity.(map[string]any)
+		components := entityRecord["components"].(map[string]any)
+		if _, isValid := components["squad"]; isValid {
+			ownSquadID = entityRecord["id"].(float64)
+			break
+		}
+	}
 	commandDoc := map[string]any{"Command": map[string]any{"MoveSquads": map[string]any{
 		"squad_ids": []any{ownSquadID}, "target": map[string]any{"x": 5, "y": 0, "z": 5},
 	}}}
 	commandJSON, _ := json.Marshal(commandDoc)
-	if err := conn.Write(ctx, websocket.MessageText, commandJSON); err != nil {
-		t.Fatal(err)
+	if writeCommandError := connection.Write(requestContext, websocket.MessageText, commandJSON); writeCommandError != nil {
+		testCase.Fatal(writeCommandError)
 	}
 	// Next messages may be Delta snapshots; wait for the CmdAck.
 	deadline := time.Now().Add(5 * time.Second)
 	for {
 		if time.Now().After(deadline) {
-			t.Fatal("no CmdAck received")
+			testCase.Fatal("no CmdAck received")
 		}
-		envelope := readMsg()
-		if ack, valid := envelope["CmdAck"].(map[string]any); valid {
-			if ack["ok"] != true {
-				t.Fatalf("command rejected: %v", ack)
+		envelope := readMessage()
+		if acknowledgement, valid := envelope["CmdAck"].(map[string]any); valid {
+			if acknowledgement["ok"] != false || acknowledgement["reason"] != "waiting for all players to finish loading" {
+				testCase.Fatalf("gameplay must be rejected before all clients load: %v", acknowledgement)
 			}
 			break
 		}

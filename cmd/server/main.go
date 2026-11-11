@@ -40,16 +40,17 @@ import (
 )
 
 func main() {
-	httpAddr := flag.String("http", ":8080", "HTTP/WebSocket/lobby listen address")
-	wtAddr := flag.String("wt", ":4433", "WebTransport (QUIC) listen address")
-	certDir := flag.String("cert-dir", "certs", "directory for the self-signed WT certificate")
+	httpAddress := flag.String("http", ":8080", "HTTP/WebSocket/lobby listen address")
+	webTransportAddress := flag.String("wt", ":4433", "WebTransport (QUIC) listen address")
+	certificateDirectory := flag.String("cert-dir", "certs", "directory for the self-signed WT certificate")
 	skipWebTransport := flag.Bool("no-wt", false, "disable WebTransport, serve HTTP/WS only")
 	flag.Parse()
 
 	gameHub := hub.NewHub()
 
 	router := http.NewServeMux()
-	router.Handle("/api/", server.API(gameHub))
+	connection := &server.ConnectionInfo{}
+	router.Handle("/api/", server.API(gameHub, connection))
 	router.HandleFunc("/join", transport.WSHandler(gameHub))
 	router.HandleFunc("/grimcraft", func(writer http.ResponseWriter, request *http.Request) {
 		http.Error(writer, "use WebTransport (QUIC) for this endpoint", http.StatusBadRequest)
@@ -60,15 +61,18 @@ func main() {
 	})
 
 	if *skipWebTransport {
-		log.Printf("HTTP/WS+Lobbies on %s (WebTransport disabled)", *httpAddr)
-		log.Fatal(http.ListenAndServe(*httpAddr, router))
+		log.Printf("HTTP/WS+Lobbies on %s (WebTransport disabled)", *httpAddress)
+		log.Fatal(http.ListenAndServe(*httpAddress, router))
 	}
 
-	cert, certDER, err := ensureCert(*certDir)
-	if err != nil {
-		log.Fatalf("cert: %v", err)
+	certificate, certificateDER, operationError := ensureCert(*certificateDirectory)
+	if operationError != nil {
+		log.Fatalf("cert: %v", operationError)
 	}
-	fingerprint := sha256.Sum256(certDER)
+	fingerprint := sha256.Sum256(certificateDER)
+	connection.Enabled = true
+	connection.WebTransportURL = listenURL("https", *webTransportAddress) + "/grimcraft"
+	connection.CertificateHash = hex.EncodeToString(fingerprint[:])
 	fmt.Printf(`
 ══════════════════════════════════════════════════════════════
   GRIMCRAFT-GO MULTIPLAYER SERVER
@@ -80,42 +84,42 @@ func main() {
     SERVER_URL       = '%s'
     SERVER_CERT_HASH = '%s'
 ══════════════════════════════════════════════════════════════
-`, listenURL("http", *httpAddr), listenURL("https", *wtAddr)+"/grimcraft", len(gameHub.List()), listenURL("https", *wtAddr)+"/grimcraft", hex.EncodeToString(fingerprint[:]))
+`, listenURL("http", *httpAddress), listenURL("https", *webTransportAddress)+"/grimcraft", len(gameHub.List()), listenURL("https", *webTransportAddress)+"/grimcraft", hex.EncodeToString(fingerprint[:]))
 
-	wtServer := &webtransport.Server{
-		H3:          http3.Server{Addr: *wtAddr, TLSConfig: &tls.Config{Certificates: []tls.Certificate{cert}}},
+	webTransportServer := &webtransport.Server{
+		H3:          http3.Server{Addr: *webTransportAddress, TLSConfig: &tls.Config{Certificates: []tls.Certificate{certificate}}},
 		CheckOrigin: func(request *http.Request) bool { return true },
 	}
-	wtRouter := http.NewServeMux()
-	wtRouter.HandleFunc("/grimcraft", transport.WTHandler(gameHub, wtServer))
-	wtServer.H3.Handler = wtRouter
+	webTransportRouter := http.NewServeMux()
+	webTransportRouter.HandleFunc("/grimcraft", transport.WTHandler(gameHub, webTransportServer))
+	webTransportServer.H3.Handler = webTransportRouter
 	go func() {
-		if err := wtServer.ListenAndServe(); err != nil {
-			log.Fatalf("webtransport: %v", err)
+		if currentOperationError := webTransportServer.ListenAndServe(); currentOperationError != nil {
+			log.Fatalf("webtransport: %v", currentOperationError)
 		}
 	}()
 
-	log.Printf("HTTP/WS+lobbies on %s", *httpAddr)
-	log.Fatal(http.ListenAndServe(*httpAddr, router))
+	log.Printf("HTTP/WS+lobbies on %s", *httpAddress)
+	log.Fatal(http.ListenAndServe(*httpAddress, router))
 }
 
-func ensureCert(certDir string) (tls.Certificate, []byte, error) {
-	certFile := filepath.Join(certDir, "cert.pem")
-	keyFile := filepath.Join(certDir, "key.pem")
-	if rawCert, err := os.ReadFile(certFile); err == nil {
-		if rawKey, err := os.ReadFile(keyFile); err == nil {
-			if cert, err := tls.X509KeyPair(rawCert, rawKey); err == nil {
-				if leaf, err := x509.ParseCertificate(cert.Certificate[0]); err == nil && browserCertificateValid(leaf, time.Now()) {
-					return cert, cert.Certificate[0], nil
+func ensureCert(certificateDirectory string) (tls.Certificate, []byte, error) {
+	certificateFile := filepath.Join(certificateDirectory, "cert.pem")
+	keyFile := filepath.Join(certificateDirectory, "key.pem")
+	if rawCertificate, certificateReadError := os.ReadFile(certificateFile); certificateReadError == nil {
+		if rawPrivateKey, privateKeyReadError := os.ReadFile(keyFile); privateKeyReadError == nil {
+			if certificate, keyPairError := tls.X509KeyPair(rawCertificate, rawPrivateKey); keyPairError == nil {
+				if parsedCertificate, certificateParseError := x509.ParseCertificate(certificate.Certificate[0]); certificateParseError == nil && browserCertificateValid(parsedCertificate, time.Now()) {
+					return certificate, certificate.Certificate[0], nil
 				}
 			}
 		}
 	}
-	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	if err != nil {
-		return tls.Certificate{}, nil, err
+	privateKey, certificateError := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if certificateError != nil {
+		return tls.Certificate{}, nil, certificateError
 	}
-	certTemplate := &x509.Certificate{
+	certificateTemplate := &x509.Certificate{
 		SerialNumber: big.NewInt(time.Now().UnixNano()),
 		Subject:      pkix.Name{CommonName: "grimcraft-wt"},
 		NotBefore:    time.Now().Add(-time.Hour),
@@ -125,49 +129,49 @@ func ensureCert(certDir string) (tls.Certificate, []byte, error) {
 		DNSNames:     []string{"localhost"},
 		IPAddresses:  []net.IP{net.ParseIP("127.0.0.1"), net.ParseIP("::1")},
 	}
-	derBytes, err := x509.CreateCertificate(rand.Reader, certTemplate, certTemplate, &key.PublicKey, key)
-	if err != nil {
-		return tls.Certificate{}, nil, err
+	certificateDERBytes, certificateError := x509.CreateCertificate(rand.Reader, certificateTemplate, certificateTemplate, &privateKey.PublicKey, privateKey)
+	if certificateError != nil {
+		return tls.Certificate{}, nil, certificateError
 	}
-	if err := os.MkdirAll(certDir, 0o755); err != nil {
-		return tls.Certificate{}, nil, err
+	if directoryCreationError := os.MkdirAll(certificateDirectory, 0o755); directoryCreationError != nil {
+		return tls.Certificate{}, nil, directoryCreationError
 	}
-	certOut, err := os.Create(certFile)
-	if err != nil {
-		return tls.Certificate{}, nil, err
+	certificateOutput, certificateError := os.Create(certificateFile)
+	if certificateError != nil {
+		return tls.Certificate{}, nil, certificateError
 	}
-	_ = pem.Encode(certOut, &pem.Block{Type: "CERTIFICATE", Bytes: derBytes})
-	_ = certOut.Close()
-	keyOut, err := os.OpenFile(keyFile, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
-	if err != nil {
-		return tls.Certificate{}, nil, err
+	_ = pem.Encode(certificateOutput, &pem.Block{Type: "CERTIFICATE", Bytes: certificateDERBytes})
+	_ = certificateOutput.Close()
+	keyOutput, certificateError := os.OpenFile(keyFile, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
+	if certificateError != nil {
+		return tls.Certificate{}, nil, certificateError
 	}
-	keyDER, err := x509.MarshalECPrivateKey(key)
-	if err != nil {
-		_ = keyOut.Close()
-		return tls.Certificate{}, nil, err
+	privateKeyDER, certificateError := x509.MarshalECPrivateKey(privateKey)
+	if certificateError != nil {
+		_ = keyOutput.Close()
+		return tls.Certificate{}, nil, certificateError
 	}
-	_ = pem.Encode(keyOut, &pem.Block{Type: "EC PRIVATE KEY", Bytes: keyDER})
-	_ = keyOut.Close()
-	cert, err := tls.X509KeyPair(
-		pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: derBytes}),
-		pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: keyDER}),
+	_ = pem.Encode(keyOutput, &pem.Block{Type: "EC PRIVATE KEY", Bytes: privateKeyDER})
+	_ = keyOutput.Close()
+	currentCertificate, certificateError := tls.X509KeyPair(
+		pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certificateDERBytes}),
+		pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: privateKeyDER}),
 	)
-	return cert, derBytes, err
+	return currentCertificate, certificateDERBytes, certificateError
 }
 
 // WebTransport hash-pinned certificates must be ECDSA P-256 and valid for
 // no more than 14 days. Renew legacy RSA, expired and near-expiry certificates.
-func browserCertificateValid(cert *x509.Certificate, now time.Time) bool {
-	key, ok := cert.PublicKey.(*ecdsa.PublicKey)
-	return ok && key.Curve == elliptic.P256() && cert.NotAfter.Sub(cert.NotBefore) <= 14*24*time.Hour &&
-		!now.Before(cert.NotBefore) && now.Add(time.Hour).Before(cert.NotAfter)
+func browserCertificateValid(certificate *x509.Certificate, now time.Time) bool {
+	key, isValid := certificate.PublicKey.(*ecdsa.PublicKey)
+	return isValid && key.Curve == elliptic.P256() && certificate.NotAfter.Sub(certificate.NotBefore) <= 14*24*time.Hour &&
+		!now.Before(certificate.NotBefore) && now.Add(time.Hour).Before(certificate.NotAfter)
 }
 
-func listenURL(scheme, addr string) string {
-	host, port, err := net.SplitHostPort(addr)
-	if err != nil {
-		return scheme + "://" + addr
+func listenURL(scheme, address string) string {
+	host, port, operationError := net.SplitHostPort(address)
+	if operationError != nil {
+		return scheme + "://" + address
 	}
 	if host == "" || host == "0.0.0.0" || host == "::" {
 		host = "127.0.0.1"

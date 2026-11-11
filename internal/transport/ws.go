@@ -30,27 +30,28 @@ func WSHandler(gameHub *hub.Hub) http.HandlerFunc {
 		if teamName := query.Get("team"); teamName == "Blue" || teamName == "Red" {
 			preferred = &teamName
 		}
-		client, _, err := gameHub.Join(lobbyID, preferred, query.Get("username"), query.Get("faction"))
-		if err != nil {
-			http.Error(writer, err.Error(), http.StatusBadRequest)
+		client, _, operationError := gameHub.Join(lobbyID, preferred, query.Get("username"), query.Get("faction"))
+		if operationError != nil {
+			http.Error(writer, operationError.Error(), http.StatusBadRequest)
 			return
 		}
-		conn, err := websocket.Accept(writer, request, &websocket.AcceptOptions{OriginPatterns: []string{"*"}})
-		if err != nil {
+		connection, operationError := websocket.Accept(writer, request, &websocket.AcceptOptions{OriginPatterns: []string{"*"}})
+		if operationError != nil {
 			gameHub.Leave(lobbyID, client)
 			return
 		}
-		defer conn.Close(websocket.StatusNormalClosure, "bye")
+		defer connection.Close(websocket.StatusNormalClosure, "bye")
 		defer gameHub.Leave(lobbyID, client)
 
 		room := gameHub.RoomOf(lobbyID)
-		ctx := request.Context()
+		requestContext := request.Context()
 		room.SendSession(client)
+		gameHub.BroadcastLobby(lobbyID)
 
 		go func() {
 			for {
 				select {
-				case <-ctx.Done():
+				case <-requestContext.Done():
 					return
 				case <-client.Done:
 					return
@@ -58,10 +59,10 @@ func WSHandler(gameHub *hub.Hub) http.HandlerFunc {
 					if !active {
 						return
 					}
-					writeCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
-					err := conn.Write(writeCtx, websocket.MessageText, outgoing)
+					writeContext, cancel := context.WithTimeout(requestContext, 5*time.Second)
+					currentOperationError := connection.Write(writeContext, websocket.MessageText, outgoing)
 					cancel()
-					if err != nil {
+					if currentOperationError != nil {
 						return
 					}
 				}
@@ -69,12 +70,12 @@ func WSHandler(gameHub *hub.Hub) http.HandlerFunc {
 		}()
 
 		for {
-			_, raw, err := conn.Read(ctx)
-			if err != nil {
+			_, encodedData, readMessageError := connection.Read(requestContext)
+			if readMessageError != nil {
 				return
 			}
-			incoming, err := hub.DecodeClientMessage(raw)
-			if err != nil {
+			incoming, readMessageError := hub.DecodeClientMessage(encodedData)
+			if readMessageError != nil {
 				hub.Ack(client, false, "bad json")
 				continue
 			}
@@ -84,7 +85,10 @@ func WSHandler(gameHub *hub.Hub) http.HandlerFunc {
 				continue
 			}
 			if incoming.Command != nil {
-				accepted, reason := hub.HandleCommand(room.World(), client.PlayerID, incoming.Command)
+				handled, accepted, reason := gameHub.HandleLobbyCommand(lobbyID, client, incoming.Command)
+				if !handled {
+					accepted, reason = room.ApplyCommand(client.PlayerID, incoming.Command)
+				}
 				hub.Ack(client, accepted, reason)
 				if !accepted {
 					log.Printf("[ws] lobby=%s player=%d rejected: %s", lobbyID, client.PlayerID, reason)

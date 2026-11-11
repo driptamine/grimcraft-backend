@@ -13,37 +13,37 @@ import (
 	"time"
 )
 
-func TestEnsureCertBrowserCompatibleAndReused(t *testing.T) {
-	dir := t.TempDir()
-	_, der, err := ensureCert(dir)
-	if err != nil {
-		t.Fatal(err)
+func TestEnsureCertBrowserCompatibleAndReused(testCase *testing.T) {
+	dir := testCase.TempDir()
+	_, certificateDER, operationError := ensureCert(dir)
+	if operationError != nil {
+		testCase.Fatal(operationError)
 	}
-	cert, err := x509.ParseCertificate(der)
-	if err != nil {
-		t.Fatal(err)
+	certificate, operationError := x509.ParseCertificate(certificateDER)
+	if operationError != nil {
+		testCase.Fatal(operationError)
 	}
-	if !browserCertificateValid(cert, time.Now()) {
-		t.Fatal("certificate not accepted for browser hash pinning")
+	if !browserCertificateValid(certificate, time.Now()) {
+		testCase.Fatal("certificate not accepted for browser hash pinning")
 	}
-	if !bytes.Equal(cert.IPAddresses[0], []byte{127, 0, 0, 1}) && cert.IPAddresses[0].String() != "127.0.0.1" {
-		t.Fatal("missing loopback SAN")
+	if !bytes.Equal(certificate.IPAddresses[0], []byte{127, 0, 0, 1}) && certificate.IPAddresses[0].String() != "127.0.0.1" {
+		testCase.Fatal("missing loopback SAN")
 	}
-	_, reused, err := ensureCert(dir)
-	if err != nil || !bytes.Equal(der, reused) {
-		t.Fatal("valid certificate should retain its fingerprint", err)
+	_, reused, operationError := ensureCert(dir)
+	if operationError != nil || !bytes.Equal(certificateDER, reused) {
+		testCase.Fatal("valid certificate should retain its fingerprint", operationError)
 	}
-	info, err := os.Stat(filepath.Join(dir, "key.pem"))
-	if err != nil || info.Mode().Perm() != 0600 {
-		t.Fatal("private key permissions", err)
+	info, operationError := os.Stat(filepath.Join(dir, "key.pem"))
+	if operationError != nil || info.Mode().Perm() != 0600 {
+		testCase.Fatal("private key permissions", operationError)
 	}
 }
 
-func TestBrowserCertificateRejectsLegacyAndExpired(t *testing.T) {
+func TestBrowserCertificateRejectsLegacyAndExpired(testCase *testing.T) {
 	now := time.Now()
-	ec, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	privateKey, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	rsaKey, _ := rsa.GenerateKey(rand.Reader, 2048)
-	good := x509.Certificate{PublicKey: &ec.PublicKey, NotBefore: now.Add(-time.Hour), NotAfter: now.Add(13 * 24 * time.Hour)}
+	good := x509.Certificate{PublicKey: &privateKey.PublicKey, NotBefore: now.Add(-time.Hour), NotAfter: now.Add(13 * 24 * time.Hour)}
 	for _, test := range []struct {
 		name string
 		cert x509.Certificate
@@ -53,19 +53,19 @@ func TestBrowserCertificateRejectsLegacyAndExpired(t *testing.T) {
 		{"expired", x509.Certificate{PublicKey: good.PublicKey, NotBefore: now.Add(-13 * 24 * time.Hour), NotAfter: now.Add(-time.Hour)}},
 		{"not-yet-valid", x509.Certificate{PublicKey: good.PublicKey, NotBefore: now.Add(time.Hour), NotAfter: good.NotAfter}},
 	} {
-		t.Run(test.name, func(t *testing.T) {
+		testCase.Run(test.name, func(currentTestCase *testing.T) {
 			if browserCertificateValid(&test.cert, now) {
-				t.Fatal("must reject certificate")
+				currentTestCase.Fatal("must reject certificate")
 			}
 		})
 	}
 }
 
-func TestListenURL(t *testing.T) {
+func TestListenURL(testCase *testing.T) {
 	if listenURL("https", ":4433") != "https://127.0.0.1:4433" {
-		t.Fatal("default address")
+		testCase.Fatal("default address")
 	}
 	if listenURL("https", "127.0.0.1:4433") != "https://127.0.0.1:4433" {
-		t.Fatal("explicit loopback")
+		testCase.Fatal("explicit loopback")
 	}
 }
