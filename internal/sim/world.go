@@ -32,7 +32,7 @@ const (
 )
 
 var buildCosts = map[string]float64{
-	"hq": 300, "barracks": 150, "infantry_command": 150, "squad": 100,
+	"hq": 300, "hq-anim": 300, "barracks": 150, "infantry_command": 150, "squad": 100,
 	"builder": 80, "reinforce": 20, "listening_post": 60, "listeningPost": 60,
 	"tower": 120, "thermoGen": 80, "thermo_generator": 80, "towerBase": 80,
 	"apc": 180, "mechanized": 180, "grenadeUpgrade": 30, "plasmaUpgrade": 20,
@@ -49,8 +49,8 @@ func costOf(name string) float64 {
 
 func constructTimeOf(buildingType string) float64 {
 	switch buildingType {
-	case "hq":
-		return 0
+	case "hq", "hq-anim":
+		return 15
 	case "barracks", "infantry_command", "mechanized":
 		return 8
 	case "tower", "towerBase":
@@ -150,6 +150,7 @@ type Builder struct {
 	BuildTarget  *int
 	BuildType    string
 	BuildPos     *protocol.Vec3
+	BuildWorkPos *protocol.Vec3
 	BuildSP      *int
 	BuildProg    float64
 	IsBuilding   bool
@@ -165,67 +166,80 @@ type Builder struct {
 
 // Building entity (hq, barracks, mechanized, ...).
 type Building struct {
-	ID            int
-	Team          string
-	Faction       string
-	Owner         int
-	Type          string
-	Pos           protocol.Vec3
-	HP            float64
-	MaxHP         float64
-	Constructing  bool
-	Progress      float64
-	ConstructTime float64
-	Queue         []ProdItem
-	Research      []ResearchItem
-	Rally         *protocol.Vec3
-	Addons        []string
-	Tier          int
+	ID               int
+	Team             string
+	Faction          string
+	Owner            int
+	Type             string
+	Pos              protocol.Vec3
+	HP               float64
+	MaxHP            float64
+	Constructing     bool
+	Progress         float64
+	ConstructTime    float64
+	PendingWorker    bool
+	RequiresWorker   bool
+	DeliveryProgress float64
+	DeliveryTime     float64
+	StrategicPointID *int
+	Queue            []ProdItem
+	Research         []ResearchItem
+	Rally            *protocol.Vec3
+	Addons           []string
+	Tier             int
 }
 
 // Structure entity (tower, turret, thermo, plasma_generator, ...).
 type Structure struct {
-	ID            int
-	Team          string
-	Faction       string
-	Owner         int
-	Type          string
-	Pos           protocol.Vec3
-	HP            float64
-	MaxHP         float64
-	Constructing  bool
-	Progress      float64
-	ConstructTime float64
-	AttackRange   float64
-	AttackRate    float64
-	AttackCd      float64
-	Research      []ResearchItem
+	ID               int
+	Team             string
+	Faction          string
+	Owner            int
+	Type             string
+	Pos              protocol.Vec3
+	HP               float64
+	MaxHP            float64
+	Constructing     bool
+	Progress         float64
+	ConstructTime    float64
+	PendingWorker    bool
+	RequiresWorker   bool
+	DeliveryProgress float64
+	DeliveryTime     float64
+	AttackRange      float64
+	AttackRate       float64
+	AttackCd         float64
+	Research         []ResearchItem
 }
 
 // Vehicle/APC/Airfield/Jet simplified movables.
 type Vehicle struct {
-	ID            int
-	Kind          string // "vehicle" | "apc" | "airfield" | "jet"
-	Team          string
-	Faction       string
-	Owner         int
-	Pos           protocol.Vec3
-	HP            float64
-	MaxHP         float64
-	MoveOrder     *protocol.Vec3
-	Constructing  bool
-	Progress      float64
-	ConstructTime float64
-	Queue         []ProdItem
-	Rally         *protocol.Vec3
-	PatrolMode    string
-	moved         bool
+	ID             int
+	Kind           string // "vehicle" | "apc" | "airfield" | "jet"
+	Name           string
+	Model          string
+	Icon           string
+	ProjectileType string
+	Team           string
+	Faction        string
+	Owner          int
+	Pos            protocol.Vec3
+	HP             float64
+	MaxHP          float64
+	MoveOrder      *protocol.Vec3
+	Constructing   bool
+	Progress       float64
+	ConstructTime  float64
+	Queue          []ProdItem
+	Rally          *protocol.Vec3
+	PatrolMode     string
+	moved          bool
 }
 
 type ProdItem struct {
-	Type     string
-	Progress float64
-	Total    float64
+	Type     string  `json:"type"`
+	Progress float64 `json:"progress"`
+	Total    float64 `json:"total"`
 }
 
 type ResearchItem struct {
@@ -236,16 +250,17 @@ type ResearchItem struct {
 
 // Point is a strategic point / relic / objective.
 type Point struct {
-	ID               int
-	Pos              protocol.Vec3
-	Kind             string
-	Owner            string // "" | "Blue" | "Red"
-	Faction          string
-	RaiseFrom        *float64
-	CaptureProgress  float64 // -1..1
-	HasListeningPost bool
-	LPTier           int
-	Research         []ResearchItem
+	ID                    int
+	Pos                   protocol.Vec3
+	Kind                  string
+	Owner                 string // "" | "Blue" | "Red"
+	Faction               string
+	RaiseFrom             *float64
+	CaptureProgress       float64 // -1..1
+	HasListeningPost      bool
+	ListeningPostEntityID *int
+	LPTier                int
+	Research              []ResearchItem
 }
 
 // Player holds per-player economy.
@@ -400,6 +415,7 @@ func (world *World) RemovePlayerSquads(playerID int) {
 	}
 	for buildingID, building := range world.Buildings {
 		if building.Owner == playerID {
+			world.removeListeningPostLinkLocked(building)
 			delete(world.Buildings, buildingID)
 		}
 	}
@@ -445,6 +461,18 @@ func (world *World) PlaceBuilding(owner int, builderID int, buildingType string,
 	if player == nil {
 		return 0, false
 	}
+	var listeningPoint *Point
+	if buildingType == "listening_post" && player.Faction == "ig" {
+		for _, point := range world.Points {
+			if point.Owner == player.Team && dist(point.Pos, position) < 2 && !point.HasListeningPost && point.ListeningPostEntityID == nil {
+				listeningPoint = point
+				break
+			}
+		}
+		if listeningPoint == nil {
+			return 0, false
+		}
+	}
 	cost := costOf(buildingType)
 	if player.Requisition < cost {
 		return 0, false
@@ -453,7 +481,7 @@ func (world *World) PlaceBuilding(owner int, builderID int, buildingType string,
 	entityID := world.allocID()
 	switch buildingType {
 	case "tower", "turret", "towerBase", "gunTurret", "thermoGen", "thermo_generator",
-		"plasma_generator", "tactica_control", "mars_pattern", "mines":
+		"plasma_generator", "tactica_control", "mines":
 		attackRange, rate := 0.0, 0.0
 		if buildingType == "tower" || buildingType == "turret" {
 			attackRange, rate = 28, 0.8
@@ -463,11 +491,14 @@ func (world *World) PlaceBuilding(owner int, builderID int, buildingType string,
 			attackRange, rate = 22, 2.5
 		}
 		world.Structures[entityID] = &Structure{ID: entityID, Team: player.Team, Faction: player.Faction, Owner: owner,
-			Type: buildingType, Pos: position, HP: 300, MaxHP: 300, Constructing: true,
+			Type: buildingType, Pos: position, HP: 300, MaxHP: 300, Constructing: true, RequiresWorker: true,
 			ConstructTime: constructTimeOf(buildingType), AttackRange: attackRange, AttackRate: rate}
+		if structure := world.Structures[entityID]; hasAnimatedConstruction(structure.Faction, structure.Type) {
+			structure.DeliveryTime = constructionDeliveryTime
+		}
 	default:
 		healthPoints := 400.0
-		if buildingType == "hq" {
+		if buildingType == "hq" || buildingType == "hq-anim" {
 			healthPoints = 2000
 		} else if buildingType == "mechanized" {
 			healthPoints = 800
@@ -475,14 +506,29 @@ func (world *World) PlaceBuilding(owner int, builderID int, buildingType string,
 		constructionTime := constructTimeOf(buildingType)
 		isConstructing := constructionTime > 0
 		world.Buildings[entityID] = &Building{ID: entityID, Team: player.Team, Faction: player.Faction, Owner: owner,
-			Type: buildingType, Pos: position, HP: healthPoints, MaxHP: healthPoints, Constructing: isConstructing,
+			Type: buildingType, Pos: position, HP: healthPoints, MaxHP: healthPoints, Constructing: isConstructing, RequiresWorker: true,
 			ConstructTime: constructionTime, Rally: &protocol.Vec3{X: position.X, Z: position.Z + 10}, Tier: 1}
+		if building := world.Buildings[entityID]; building != nil && hasAnimatedConstruction(building.Faction, building.Type) {
+			building.DeliveryTime = constructionDeliveryTime
+		}
+	}
+	if listeningPoint != nil {
+		world.Buildings[entityID].StrategicPointID = &listeningPoint.ID
+		listeningPoint.ListeningPostEntityID = &entityID
 	}
 	if builder, isValid := world.Builders[builderID]; isValid && builder.Owner == owner {
 		builder.BuildTarget = &entityID
 		builder.BuildType = buildingType
 		builder.BuildPos = &position
 		builder.IsBuilding = true
+		if building := world.Buildings[entityID]; building != nil && building.RequiresWorker {
+			assignConstructionBuilder(builder, building.Pos, building.Faction, building.Type)
+			building.PendingWorker = true
+		}
+		if structure := world.Structures[entityID]; structure != nil && structure.RequiresWorker {
+			assignConstructionBuilder(builder, structure.Pos, structure.Faction, structure.Type)
+			structure.PendingWorker = true
+		}
 	}
 	return entityID, true
 }
@@ -503,6 +549,12 @@ func (world *World) TrainUnit(owner int, buildingID int, unitType string) bool {
 		if building.Owner != owner || building.Constructing || len(building.Queue) >= 6 {
 			return false
 		}
+		if player.Faction == "ig" && (building.Type == "mechanized" || building.Type == "mars_pattern") {
+			entry, found := imperialGuardVehicleProduction[unitType]
+			if !found || entry.buildingType != building.Type || (entry.requiredTech != "" && !player.Research[entry.requiredTech]) {
+				return false
+			}
+		}
 		player.Requisition -= cost
 		building.Queue = append(building.Queue, ProdItem{Type: unitType, Total: total})
 		return true
@@ -519,6 +571,9 @@ func (world *World) TrainUnit(owner int, buildingID int, unitType string) bool {
 }
 
 func unitCostTime(unitType string) (float64, float64) {
+	if entry, found := imperialGuardVehicleProduction[unitType]; found {
+		return entry.cost, entry.time
+	}
 	switch unitType {
 	case "builder":
 		return 80, 2
@@ -652,6 +707,7 @@ func (world *World) Demolish(owner int, entityID int) bool {
 		if building.Owner != owner {
 			return false
 		}
+		world.removeListeningPostLinkLocked(building)
 		delete(world.Buildings, entityID)
 		return true
 	}
@@ -734,6 +790,10 @@ func (world *World) Advance(deltaTime float64) {
 	// builders movement + build progress
 	for _, builder := range world.Builders {
 		builder.moved = false
+		world.resolveBuilderFootprintsLocked(builder)
+		if world.advanceConstructionBuilderLocked(builder, deltaTime) {
+			continue
+		}
 		if builder.IsBuilding {
 			builder.BuildProg += deltaTime
 			total := 3.0
@@ -747,6 +807,13 @@ func (world *World) Advance(deltaTime float64) {
 		}
 		if builder.MoveTarget != nil {
 			target := *builder.MoveTarget
+			if builder.BuildTarget != nil {
+				if building := world.Buildings[*builder.BuildTarget]; building != nil {
+					target = constructionApproachWaypoint(builder.Pos, target, structureFootprint(building.Faction, building.Type, true, building.Pos))
+				} else if structure := world.Structures[*builder.BuildTarget]; structure != nil {
+					target = constructionApproachWaypoint(builder.Pos, target, structureFootprint(structure.Faction, structure.Type, true, structure.Pos))
+				}
+			}
 			distance := dist(builder.Pos, target)
 			step := builder.Speed * deltaTime
 			if step <= 0 {
@@ -754,7 +821,9 @@ func (world *World) Advance(deltaTime float64) {
 			}
 			if distance <= math.Max(step, 0.3) {
 				builder.Pos.X, builder.Pos.Z = target.X, target.Z
-				builder.MoveTarget = nil
+				if dist(target, *builder.MoveTarget) < .01 {
+					builder.MoveTarget = nil
+				}
 				builder.moved = true
 			} else {
 				directionX := (target.X - builder.Pos.X) / distance
@@ -764,16 +833,39 @@ func (world *World) Advance(deltaTime float64) {
 				builder.moved = true
 			}
 		}
+		world.resolveBuilderFootprintsLocked(builder)
 	}
 	// buildings construction + production + research
 	for _, building := range world.Buildings {
 		if building.Constructing {
+			if building.RequiresWorker || hasAnimatedConstruction(building.Faction, building.Type) {
+				building.PendingWorker = !world.hasActiveConstructionWorkerLocked(building.ID, building.Owner, building.Pos, building.Faction, building.Type)
+			}
+			constructionDelta := deltaTime
+			if building.DeliveryTime > 0 {
+				deliveryDelta := math.Min(deltaTime, math.Max(0, building.DeliveryTime-building.DeliveryProgress))
+				building.DeliveryProgress += deliveryDelta
+				constructionDelta -= deliveryDelta
+			}
+			if building.PendingWorker {
+				continue
+			}
 			if building.ConstructTime <= 0 {
 				building.Constructing = false
 			} else {
-				building.Progress += deltaTime
+				building.Progress += constructionDelta
 				if building.Progress >= building.ConstructTime {
 					building.Constructing = false
+				}
+			}
+			if !building.Constructing {
+				world.finishConstructionBuildersLocked(building.ID)
+				if building.StrategicPointID != nil {
+					if point := world.Points[*building.StrategicPointID]; point != nil {
+						point.HasListeningPost = true
+						point.LPTier = 1
+						point.Faction = building.Faction
+					}
 				}
 			}
 			continue
@@ -800,9 +892,22 @@ func (world *World) Advance(deltaTime float64) {
 	}
 	for _, producingStructure := range world.Structures {
 		if producingStructure.Constructing {
-			producingStructure.Progress += deltaTime
+			if producingStructure.RequiresWorker || hasAnimatedConstruction(producingStructure.Faction, producingStructure.Type) {
+				producingStructure.PendingWorker = !world.hasActiveConstructionWorkerLocked(producingStructure.ID, producingStructure.Owner, producingStructure.Pos, producingStructure.Faction, producingStructure.Type)
+			}
+			constructionDelta := deltaTime
+			if producingStructure.DeliveryTime > 0 {
+				deliveryDelta := math.Min(deltaTime, math.Max(0, producingStructure.DeliveryTime-producingStructure.DeliveryProgress))
+				producingStructure.DeliveryProgress += deliveryDelta
+				constructionDelta -= deliveryDelta
+			}
+			if producingStructure.PendingWorker {
+				continue
+			}
+			producingStructure.Progress += constructionDelta
 			if producingStructure.Progress >= producingStructure.ConstructTime {
 				producingStructure.Constructing = false
+				world.finishConstructionBuildersLocked(producingStructure.ID)
 			}
 			continue
 		}
@@ -1167,6 +1272,18 @@ func (world *World) finishBuilderLocked(builder *Builder) {
 }
 
 func (world *World) spawnProductionLocked(team string, owner int, unitType string, targetPosition protocol.Vec3, rally *protocol.Vec3) {
+	if entry, found := imperialGuardVehicleProduction[unitType]; found && world.playerOf(owner) != nil && world.playerOf(owner).Faction == "ig" {
+		vehicleID := world.allocID()
+		projectileType := "Bullet"
+		if unitType == "chimera" {
+			projectileType = "beam"
+		}
+		world.Vehicles[vehicleID] = &Vehicle{ID: vehicleID, Kind: "vehicle", Team: team, Owner: owner, Faction: "ig",
+			Name: unitType, Model: "models/ig/vehicles/" + unitType + ".glb",
+			Icon: "assets/icons/Imperial Guard/Units/Vehicles/" + entry.icon, ProjectileType: projectileType,
+			Pos: protocol.Vec3{X: targetPosition.X - 6, Z: targetPosition.Z}, HP: 500, MaxHP: 500, MoveOrder: rally}
+		return
+	}
 	switch unitType {
 	case "builder":
 		builderID := world.allocID()
@@ -1265,7 +1382,7 @@ func (world *World) MoveSquads(playerID int, squadIDs []int, target protocol.Vec
 		if builder, found := world.Builders[squadID]; found && builder.Owner == playerID {
 			targetPosition := target
 			builder.MoveTarget = &targetPosition
-			builder.IsBuilding = false
+			clearBuilderBuildOrder(builder)
 			moved = append(moved, squadID)
 			continue
 		}
@@ -1299,7 +1416,7 @@ func (world *World) MoveUnits(playerID int, entityIDs []int, target protocol.Vec
 		if builder, found := world.Builders[entityID]; found && builder.Owner == playerID {
 			builderDestination := target
 			builder.MoveTarget = &builderDestination
-			builder.IsBuilding = false
+			clearBuilderBuildOrder(builder)
 			moved = append(moved, entityID)
 			continue
 		}
@@ -1351,8 +1468,7 @@ func (world *World) StopUnits(playerID int, entityIDs []int) (stopped, rejected 
 		}
 		if builder, found := world.Builders[entityID]; found && builder.Owner == playerID {
 			builder.MoveTarget = nil
-			builder.IsBuilding = false
-			builder.BuildProg = 0
+			clearBuilderBuildOrder(builder)
 			stopped = append(stopped, entityID)
 			continue
 		}
@@ -1401,6 +1517,7 @@ func (world *World) UnitCommand(playerID int, entityIDs []int, command string, t
 			if builder, isValid := world.Builders[entityID]; isValid && builder.Owner == playerID {
 				builderDestination := target
 				builder.MoveTarget = &builderDestination
+				clearBuilderBuildOrder(builder)
 				moved = append(moved, entityID)
 				continue
 			}
@@ -1663,7 +1780,7 @@ func (world *World) BuilderCommand(playerID, builderID int, target protocol.Vec3
 	}
 	targetPosition := target
 	builder.MoveTarget = &targetPosition
-	builder.IsBuilding = false
+	clearBuilderBuildOrder(builder)
 	if repairID != nil {
 		builder.RepairTarget = repairID
 	}
@@ -1679,19 +1796,33 @@ func (world *World) ResumeBuild(playerID, builderID, targetID int) bool {
 		return false
 	}
 	if building, currentIsValid := world.Buildings[targetID]; currentIsValid {
+		if (building.RequiresWorker || hasAnimatedConstruction(building.Faction, building.Type)) && (!building.Constructing || building.Owner != playerID) {
+			return false
+		}
 		builder.BuildTarget = &targetID
 		builder.BuildType = building.Type
 		builder.BuildPos = &building.Pos
 		builder.IsBuilding = true
 		builder.BuildProg = 0
+		if building.RequiresWorker || hasAnimatedConstruction(building.Faction, building.Type) {
+			assignConstructionBuilder(builder, building.Pos, building.Faction, building.Type)
+			building.PendingWorker = true
+		}
 		return true
 	}
 	if structure, structureFound := world.Structures[targetID]; structureFound {
+		if (structure.RequiresWorker || hasAnimatedConstruction(structure.Faction, structure.Type)) && (!structure.Constructing || structure.Owner != playerID) {
+			return false
+		}
 		builder.BuildTarget = &targetID
 		builder.BuildType = structure.Type
 		builder.BuildPos = &structure.Pos
 		builder.IsBuilding = true
 		builder.BuildProg = 0
+		if structure.RequiresWorker || hasAnimatedConstruction(structure.Faction, structure.Type) {
+			assignConstructionBuilder(builder, structure.Pos, structure.Faction, structure.Type)
+			structure.PendingWorker = true
+		}
 		return true
 	}
 	return false
@@ -1938,7 +2069,13 @@ func (world *World) snapshotV2Locked() map[string]any {
 			"meleeOrder": builder.MeleeOrder, "isBuilding": builder.IsBuilding, "buildProgress": builder.BuildProg,
 			"animation": builderAnimation(builder), "moving": builder.moved, "repairTarget": builder.RepairTarget,
 		}
-		emit(builderID, "builder", builderComponent, builder.Pos, protocol.Vec3{X: 0, Z: 1}, builder.Owner)
+		facing := protocol.Vec3{Z: 1}
+		if builder.IsBuilding && builder.BuildPos != nil {
+			facing = protocol.Vec3{X: builder.BuildPos.X - builder.Pos.X, Z: builder.BuildPos.Z - builder.Pos.Z}
+		} else if builder.MoveTarget != nil {
+			facing = protocol.Vec3{X: builder.MoveTarget.X - builder.Pos.X, Z: builder.MoveTarget.Z - builder.Pos.Z}
+		}
+		emit(builderID, "builder", builderComponent, builder.Pos, facing, builder.Owner)
 	}
 	for buildingID, building := range world.Buildings {
 		var rally any
@@ -1951,8 +2088,15 @@ func (world *World) snapshotV2Locked() map[string]any {
 			"researchQueue": nonNullList(building.Research), "addons": nonNullList(building.Addons), "tier": building.Tier,
 			"rallyPoint": rally, "constructing": building.Constructing,
 			"constructProgress": building.Progress, "constructTime": building.ConstructTime,
+			"pendingWorker": building.PendingWorker, "deliveryProgress": building.DeliveryProgress, "deliveryTime": building.DeliveryTime,
+			"requiresWorker":   building.RequiresWorker,
+			"strategicPointId": building.StrategicPointID,
 		}
-		emit(buildingID, "building", buildingComponent, building.Pos, protocol.Vec3{X: 0, Z: 1}, building.Owner)
+		facing := protocol.Vec3{Z: 1}
+		if building.Faction == "ig" && (building.Type == "hq" || building.Type == "hq-anim") {
+			facing = protocol.Vec3{X: 1}
+		}
+		emit(buildingID, "building", buildingComponent, building.Pos, facing, building.Owner)
 	}
 	for structureID, structure := range world.Structures {
 		structureComponent := map[string]any{
@@ -1961,6 +2105,8 @@ func (world *World) snapshotV2Locked() map[string]any {
 			"attackRange": structure.AttackRange, "attackRate": structure.AttackRate,
 			"constructing": structure.Constructing, "constructProgress": structure.Progress,
 			"constructTime": structure.ConstructTime, "researchQueue": nonNullList(structure.Research),
+			"pendingWorker": structure.PendingWorker, "deliveryProgress": structure.DeliveryProgress, "deliveryTime": structure.DeliveryTime,
+			"requiresWorker": structure.RequiresWorker,
 		}
 		emit(structureID, "structure", structureComponent, structure.Pos, protocol.Vec3{X: 0, Z: 1}, structure.Owner)
 	}
@@ -1978,6 +2124,7 @@ func (world *World) snapshotV2Locked() map[string]any {
 			rally = vecBox(*vehicle.Rally)
 		}
 		vehicleComponent := map[string]any{
+			"name": vehicle.Name, "model": vehicle.Model, "icon": vehicle.Icon, "projectileType": vehicle.ProjectileType,
 			"team": lowerTeam(vehicle.Team), "faction": vehicle.Faction, "position": vecBox(vehicle.Pos),
 			"hp": vehicle.HP, "maxHp": vehicle.MaxHP, "moveOrder": vehicleMoveOrder,
 			"constructing": vehicle.Constructing, "constructProgress": vehicle.Progress,
@@ -1999,6 +2146,7 @@ func (world *World) snapshotV2Locked() map[string]any {
 			"faction": point.Faction, "captureProgress": point.CaptureProgress,
 			"captureRadius": CaptureRadius, "hasListeningPost": point.HasListeningPost,
 			"lpTier": point.LPTier, "researchQueue": nonNullList(point.Research), "raiseFrom": point.RaiseFrom,
+			"listeningPostEntityId": point.ListeningPostEntityID,
 		}
 		emit(pointID, "strategicPoint", pointComponent, point.Pos, protocol.Vec3{X: 0, Z: 1}, 0)
 	}

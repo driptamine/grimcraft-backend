@@ -57,8 +57,14 @@ func TestSkirmishCommandParity(testCase *testing.T) {
 			break
 		}
 	}
-	if buildingPlaced, placementFailureReason := HandleCommand(world, client.PlayerID, mustCommand(testCase, `{"PlaceBuilding":{"builder_id":0,"building_type":"barracks","position":{"x":-20,"y":0,"z":5}}}`)); !buildingPlaced {
-		_ = builderID
+	if builderID == 0 {
+		builder := world.SpawnBuilder(world.Players[client.PlayerID].Team, client.PlayerID, "ig", -25, 5)
+		builderID = builder.ID
+	}
+	buildPosition := world.Builders[builderID].Pos
+	placementJSON, _ := json.Marshal(map[string]any{"PlaceBuilding": map[string]any{
+		"builder_id": builderID, "building_type": "barracks", "position": map[string]any{"x": buildPosition.X + 8, "y": 0, "z": buildPosition.Z}}})
+	if buildingPlaced, placementFailureReason := HandleCommand(world, client.PlayerID, mustCommand(testCase, string(placementJSON))); !buildingPlaced {
 		testCase.Fatalf("PlaceBuilding rejected: %s", placementFailureReason)
 	}
 	var barracks int
@@ -71,9 +77,12 @@ func TestSkirmishCommandParity(testCase *testing.T) {
 	if barracks == 0 {
 		testCase.Fatal("no barracks after PlaceBuilding")
 	}
-	// finish construction instantly via ticks
+	// The assigned worker approaches and finishes construction through ticks.
 	for index := 0; index < 200 && world.Buildings[barracks].Constructing; index++ {
 		world.Advance(0.1)
+	}
+	if world.Buildings[barracks].Constructing {
+		testCase.Fatal("the assigned worker did not finish construction")
 	}
 	if invalidProductionAccepted, invalidProductionReason := HandleCommand(world, client.PlayerID, mustCommand(testCase, `{"TrainUnit":{"building_id":0,"unit_type":"squad"}}`)); invalidProductionAccepted {
 		testCase.Fatalf("TrainUnit with bad id must reject, got ok")
