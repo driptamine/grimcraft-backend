@@ -82,7 +82,7 @@ func TestInfantryCommandDeliveryCancelAndResume(testCase *testing.T) {
 }
 
 func TestAdditionalIGConstructionSites(testCase *testing.T) {
-	for _, buildingType := range []string{"listening_post", "mechanized", "mars_pattern", "plasma_generator", "tactica_control", "hq", "hq-anim"} {
+	for _, buildingType := range []string{"listening_post", "mechanized", "mars_pattern", "plasma_generator", "tactica_control", "turret", "hq", "hq-anim"} {
 		testCase.Run(buildingType, func(testCase *testing.T) {
 			world := NewWorld()
 			world.EnsurePlayer(1, "Blue", "ig")

@@ -8,7 +8,7 @@ import (
 )
 
 func TestConstructionWorkersApproachOutsideEachDrop(testCase *testing.T) {
-	for _, buildingType := range []string{"hq", "infantry_command", "mechanized", "mars_pattern", "listening_post", "plasma_generator", "tactica_control"} {
+	for _, buildingType := range []string{"hq", "infantry_command", "mechanized", "mars_pattern", "listening_post", "plasma_generator", "tactica_control", "turret"} {
 		for _, start := range []protocol.Vec3{{X: -25, Z: -25}, {X: -25, Z: 25}, {X: 25, Z: -25}, {X: 25, Z: 25}} {
 			testCase.Run(fmt.Sprintf("%s/%g/%g", buildingType, start.X, start.Z), func(testCase *testing.T) {
 				world := NewWorld()

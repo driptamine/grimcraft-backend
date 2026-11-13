@@ -9,7 +9,7 @@ func hasAnimatedConstruction(faction, buildingType string) bool {
 		return false
 	}
 	switch buildingType {
-	case "hq", "hq-anim", "infantry_command", "barracks", "listening_post", "mechanized", "mars_pattern", "plasma_generator", "tactica_control":
+	case "hq", "hq-anim", "infantry_command", "barracks", "listening_post", "mechanized", "mars_pattern", "plasma_generator", "tactica_control", "turret":
 		return true
 	}
 	return false
