@@ -1,8 +1,10 @@
 package hub
 
 import (
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"grimcraft-go/internal/balance"
 	"time"
 )
 
@@ -86,7 +88,8 @@ func (gameHub *Hub) HandleLobbyCommand(lobbyID string, client *Client, command m
 		return true, true, ""
 	}
 	var currentArguments struct {
-		Computers []struct {
+		BalanceMod *balance.Mod `json:"balanceMod"`
+		Computers  []struct {
 			Faction string `json:"faction"`
 			Team    int    `json:"team"`
 		} `json:"computers"`
@@ -114,6 +117,15 @@ func (gameHub *Hub) HandleLobbyCommand(lobbyID string, client *Client, command m
 	if len(teams) < 2 {
 		gameHub.mutex.Unlock()
 		return true, false, "add an opponent or wait for another player"
+	}
+	if currentArguments.BalanceMod != nil {
+		if operationError := lobby.room.world.InstallBalance(currentArguments.BalanceMod); operationError != nil {
+			gameHub.mutex.Unlock()
+			return true, false, "invalid balance mod: " + operationError.Error()
+		}
+		encodedMod, _ := json.Marshal(currentArguments.BalanceMod)
+		lobby.BalanceMod = currentArguments.BalanceMod
+		lobby.BalanceHash = fmt.Sprintf("%x", sha256.Sum256(encodedMod))
 	}
 	for currentIndex, bot := range currentArguments.Computers {
 		team := "Blue"

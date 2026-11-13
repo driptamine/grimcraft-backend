@@ -2,9 +2,14 @@ package sim
 
 import "math"
 
+const captureRodPlacementTime = 2.333333
+
 // Action state is authoritative. Clients select the authored GLB clip for a slot.
 func (world *World) tickActionTimersLocked(deltaTime float64) {
 	for _, squad := range world.Squads {
+		if weapon, found := world.modWeapon(squad); found {
+			squad.AttackRange = weapon.Range
+		}
 		squad.visualCooldown = math.Max(0, squad.visualCooldown-deltaTime)
 		if squad.CaptureOrderSP == nil {
 			squad.CaptureElapsed = 0
@@ -13,6 +18,7 @@ func (world *World) tickActionTimersLocked(deltaTime float64) {
 		}
 		for index := range squad.Soldiers {
 			soldier := &squad.Soldiers[index]
+			soldier.balanceCooldown = math.Max(0, soldier.balanceCooldown-deltaTime)
 			soldier.ShootTimer = math.Max(0, soldier.ShootTimer-deltaTime)
 			soldier.MeleeTimer = math.Max(0, soldier.MeleeTimer-deltaTime)
 			soldier.HitReactionTimer = math.Max(0, soldier.HitReactionTimer-deltaTime)
@@ -75,7 +81,7 @@ func soldierAnimation(squad *Squad, soldier *Soldier, index int) string {
 			first++
 		}
 		if index == first {
-			if squad.CaptureElapsed < 2.333333 {
+			if squad.CaptureElapsed < captureRodPlacementTime {
 				return "flagPlant1"
 			}
 			if squad.CaptureElapsed < 3.708333 {

@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"grimcraft-go/internal/balance"
 	"grimcraft-go/internal/protocol"
 	"grimcraft-go/internal/sim"
 )
@@ -26,14 +27,16 @@ type PlayerSlot struct {
 
 // Lobby is one entry in the server browser; it owns one Room.
 type Lobby struct {
-	HostID  int          `json:"host_id"`
-	Started bool         `json:"started"`
-	ID      string       `json:"id"`
-	Name    string       `json:"name"`
-	Map     string       `json:"map"`
-	Current int          `json:"current"`
-	Total   int          `json:"total"`
-	Players []PlayerSlot `json:"players"`
+	BalanceMod  *balance.Mod `json:"balanceMod,omitempty"`
+	BalanceHash string       `json:"balanceHash,omitempty"`
+	HostID      int          `json:"host_id"`
+	Started     bool         `json:"started"`
+	ID          string       `json:"id"`
+	Name        string       `json:"name"`
+	Map         string       `json:"map"`
+	Current     int          `json:"current"`
+	Total       int          `json:"total"`
+	Players     []PlayerSlot `json:"players"`
 
 	room *Room
 }

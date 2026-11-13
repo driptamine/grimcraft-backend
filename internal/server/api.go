@@ -19,6 +19,7 @@ type ConnectionInfo struct {
 // frontend server browser can swap LOBBIES for a fetch() later.
 func API(gameHub *hub.Hub, connection ...*ConnectionInfo) http.Handler {
 	router := http.NewServeMux()
+	router.HandleFunc("/api/balance/test", balanceTest)
 	router.HandleFunc("/api/connection", func(responseWriter http.ResponseWriter, currentRequest *http.Request) {
 		if currentRequest.Method != http.MethodGet {
 			http.Error(responseWriter, "method not allowed", http.StatusMethodNotAllowed)

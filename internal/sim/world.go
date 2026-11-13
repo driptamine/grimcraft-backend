@@ -5,6 +5,7 @@
 package sim
 
 import (
+	"grimcraft-go/internal/balance"
 	"math"
 	"reflect"
 	"sync"
@@ -65,6 +66,7 @@ func constructTimeOf(buildingType string) float64 {
 // Soldier is intentionally minimal: the net client only needs the slot
 // array length/shape to render. Null slots mean casualties.
 type Soldier struct {
+	balanceCooldown  float64
 	ShootTimer       float64
 	MeleeTimer       float64
 	HitReactionTimer float64
@@ -276,6 +278,7 @@ type Player struct {
 
 // World is a single room's game state.
 type World struct {
+	balanceMod   *balance.Mod
 	mutex        sync.Mutex
 	Tick         uint64
 	Squads       map[int]*Squad
@@ -1066,10 +1069,10 @@ func (world *World) Advance(deltaTime float64) {
 					}
 					squad.CaptureElapsed += deltaTime
 					delta := CaptureRate * deltaTime
-					if squad.CaptureElapsed < 3.708333 {
+					if squad.CaptureElapsed < captureRodPlacementTime {
 						delta = 0
 					}
-					if squad.CaptureElapsed >= 2.333333 && currentPoint.RaiseFrom == nil {
+					if squad.CaptureElapsed >= captureRodPlacementTime && currentPoint.RaiseFrom == nil {
 						value := math.Abs(currentPoint.CaptureProgress)
 						currentPoint.RaiseFrom = &value
 					}
@@ -1129,6 +1132,9 @@ func (world *World) Advance(deltaTime float64) {
 						world.enterMeleeLocked(target, squad)
 					}
 					closeCombat := squad.meleeOpponent != nil && *squad.meleeOpponent == target.ID && distance <= meleeReleaseRange
+					if !closeCombat && world.balanceRangedAttack(squad, target) {
+						continue
+					}
 					for victimIndex := range target.Soldiers {
 						victim := &target.Soldiers[victimIndex]
 						if !victim.Alive {
